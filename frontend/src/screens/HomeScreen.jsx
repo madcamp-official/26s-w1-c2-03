@@ -1,6 +1,22 @@
-import { useState } from "react"
-import { stores, categories, regions } from "../data/mockData"
+import { useEffect, useState } from "react"
+import { categories, regions } from "../data/mockData"
 import { haversineKm, formatDistance } from "../lib/geo"
+import { getStores } from "../lib/api"
+
+// 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
+const CATEGORY_EMOJI = {
+  카페: "☕",
+  한식: "🍚",
+  중식: "🥢",
+  일식: "🍣",
+  양식: "🍝",
+  분식: "🍢",
+  술집: "🍺",
+  디저트: "🍰",
+}
+function emojiFor(category) {
+  return CATEGORY_EMOJI[category] || "🍽️"
+}
 
 // 홈 — 지역(시/도·구) 선택 또는 내 위치 기준 + 카테고리 필터
 export default function HomeScreen({ onSelectStore, myLocation, locating, onLocate }) {
@@ -9,7 +25,23 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
   const [cat, setCat] = useState("전체")
   const [nearby, setNearby] = useState(false) // 내 위치 기준 정렬 모드
 
+  const [stores, setStores] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
   const guList = regions[sido] || []
+
+  // 매장 목록은 화면 진입 시 한 번 백엔드에서 가져옴
+  useEffect(() => {
+    setLoading(true)
+    getStores()
+      .then((data) => {
+        setStores(data)
+        setError(null)
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
 
   const handleSido = (v) => {
     setSido(v)
@@ -30,8 +62,8 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .map((s) => ({ ...s, distanceKm: haversineKm(myLocation.lat, myLocation.lng, s.lat, s.lng) }))
       .sort((a, b) => a.distanceKm - b.distanceKm)
   } else {
-    // 지역 기준: 선택한 구만
-    list = list.filter((s) => s.gu === gu)
+    // 지역 기준: 주소에 선택한 구 이름이 포함된 매장만
+    list = list.filter((s) => s.address && s.address.includes(gu))
   }
 
   return (
@@ -94,41 +126,50 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
       {/* 매장 목록 */}
       <div className="space-y-3 px-5">
-        {list.length === 0 && (
+        {loading && <p className="py-10 text-center text-slate-400">불러오는 중...</p>}
+
+        {!loading && error && (
+          <p className="py-10 text-center text-red-400">매장을 불러오지 못했어요: {error}</p>
+        )}
+
+        {!loading && !error && list.length === 0 && (
           <p className="py-10 text-center text-slate-400">이 지역엔 아직 등록된 맛집이 없어요 🥲</p>
         )}
-        {list.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => onSelectStore(s)}
-            className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
-          >
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-50 text-2xl">
-              {s.image}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-slate-900">{s.name}</h2>
-                {s.distanceKm != null && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
-                    📍 {formatDistance(s.distanceKm)}
-                  </span>
-                )}
+
+        {!loading &&
+          !error &&
+          list.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onSelectStore(s)}
+              className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-50 text-2xl">
+                {emojiFor(s.category)}
               </div>
-              <p className="text-sm text-slate-500">
-                {s.category} · 방문 {s.myStamps}회
-              </p>
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {s.keywords.map((k) => (
-                  <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                    #{k}
-                  </span>
-                ))}
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-slate-900">{s.name}</h2>
+                  {s.distanceKm != null && (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
+                      📍 {formatDistance(s.distanceKm)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-500">
+                  {s.category} · 방문 {s.myStamps ?? 0}회
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {(s.keywords || []).map((k) => (
+                    <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                      #{k}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-            <span className="text-slate-300">›</span>
-          </button>
-        ))}
+              <span className="text-slate-300">›</span>
+            </button>
+          ))}
       </div>
     </div>
   )

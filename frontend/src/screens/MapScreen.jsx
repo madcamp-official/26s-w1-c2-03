@@ -1,12 +1,26 @@
-// 카카오맵 버전 MapScreen
-// index.html 에 등록된 Kakao Maps SDK(&autoload=false)를 그대로 사용합니다.
-// 내 위치·거리 계산은 lib/geo.js 를 그대로 재사용, App/Home도 안 바뀝니다.
+// 카카오맵 버전 MapScreen — 실제 백엔드 API에서 매장 데이터를 가져옴
 import { useEffect, useRef, useState } from "react"
-import { stores, categories } from "../data/mockData"
+import { categories } from "../data/mockData"
 import { haversineKm, formatDistance } from "../lib/geo"
+import { getStores } from "../lib/api"
 
 // 지도 중심 (성수동 부근)
 const CENTER = { lat: 37.5454, lng: 127.0525 }
+
+// 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
+const CATEGORY_EMOJI = {
+  카페: "☕",
+  한식: "🍚",
+  중식: "🥢",
+  일식: "🍣",
+  양식: "🍝",
+  분식: "🍢",
+  술집: "🍺",
+  디저트: "🍰",
+}
+function emojiFor(category) {
+  return CATEGORY_EMOJI[category] || "🍽️"
+}
 
 // index.html 의 sdk.js 스크립트가 로드될 때까지 기다렸다가 kakao.maps.load 콜백을 프로미스로 감싸줌
 function loadKakaoMaps() {
@@ -27,9 +41,9 @@ function loadKakaoMaps() {
   })
 }
 
-// 매장 핀 HTML — 방문한 곳은 주황, 안 간 곳은 흰색 (Leaflet divIcon과 동일한 디자인)
+// 매장 핀 HTML — 방문한 곳은 주황, 안 간 곳은 흰색
 function makePinHtml(store) {
-  const visited = store.myStamps > 0
+  const visited = (store.myStamps ?? 0) > 0
   const bg = visited ? "#f59e0b" : "#ffffff"
   const border = visited ? "3px solid #ffffff" : "2px solid #cbd5e1"
   const opacity = visited ? "1" : "0.9"
@@ -41,7 +55,7 @@ function makePinHtml(store) {
       background:${bg};border:${border};
       box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:${opacity};
       cursor:pointer;">
-      <span style="transform:rotate(45deg);font-size:20px;">${store.image}</span>
+      <span style="transform:rotate(45deg);font-size:20px;">${emojiFor(store.category)}</span>
     </div>`
 }
 
@@ -60,6 +74,16 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   const [cat, setCat] = useState("전체")
   const [mapReady, setMapReady] = useState(false)
   const [sdkError, setSdkError] = useState(null)
+
+  const [stores, setStores] = useState([])
+  const [loadError, setLoadError] = useState(null)
+
+  // 매장 목록은 화면 진입 시 한 번 백엔드에서 가져옴
+  useEffect(() => {
+    getStores()
+      .then(setStores)
+      .catch((err) => setLoadError(err.message))
+  }, [])
 
   const visibleStores = stores.filter((s) => cat === "전체" || s.category === cat)
 
@@ -90,9 +114,9 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     const el = document.createElement("div")
     el.innerHTML = `
       <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
-        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${store.image} ${store.name}</p>
+        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.category)} ${store.name}</p>
         <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
-          ${store.category}${store.myStamps > 0 ? ` · 방문 ${store.myStamps}회 ✅` : " · 아직 안 감"}
+          ${store.category}${(store.myStamps ?? 0) > 0 ? ` · 방문 ${store.myStamps}회 ✅` : " · 아직 안 감"}
         </p>
         ${
           myLocation
@@ -118,7 +142,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     popupOverlayRef.current = overlay
   }
 
-  // 매장 마커 렌더링 (카테고리 필터 바뀔 때마다 다시 그림)
+  // 매장 마커 렌더링 (매장 데이터/카테고리 필터 바뀔 때마다 다시 그림)
   useEffect(() => {
     if (!mapReady || !window.kakao) return
     const kakao = window.kakao
@@ -132,6 +156,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     }
 
     visibleStores.forEach((s) => {
+      if (s.lat == null || s.lng == null) return // 좌표 없는 매장은 스킵
       const position = new kakao.maps.LatLng(s.lat, s.lng)
       const el = document.createElement("div")
       el.innerHTML = makePinHtml(s)
@@ -146,9 +171,9 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       storeOverlaysRef.current.push(overlay)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, cat, myLocation])
+  }, [mapReady, cat, myLocation, stores])
 
-  // 내 위치 마커 표시 + 지도 이동 (Leaflet의 RecenterOnUser 역할)
+  // 내 위치 마커 표시 + 지도 이동
   useEffect(() => {
     if (!mapReady || !window.kakao || !myLocation) return
     const kakao = window.kakao
@@ -173,6 +198,12 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       {sdkError && (
         <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/90 px-6 text-center text-sm text-slate-500">
           지도를 불러오지 못했습니다: {sdkError}
+        </div>
+      )}
+
+      {loadError && (
+        <div className="absolute inset-x-3 top-16 z-[1000] rounded-xl bg-red-50 px-3 py-2 text-center text-xs text-red-500">
+          매장을 불러오지 못했어요: {loadError}
         </div>
       )}
 

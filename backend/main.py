@@ -1,19 +1,20 @@
 import os
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-# .env 파일에서 비밀키 불러오기
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+KAKAO_REST_API_KEY = os.getenv("KAKAO_REST_API_KEY")
 
 app = FastAPI(title="맛짱(Matzzang) API")
 
-# CORS: 프론트엔드(localhost:5173)에서 이 API를 호출할 수 있게 허용
-# 나중에 배포하면 여기에 실제 도메인도 추가
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -21,22 +22,79 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Supabase 클라이언트 (키가 있을 때만 생성 → 키 없어도 서버는 켜짐)
 supabase: Client | None = None
 if SUPABASE_URL and SUPABASE_KEY:
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# 서버가 살아있는지 확인용 (제일 먼저 이걸로 테스트)
 @app.get("/health")
 def health():
     return {"status": "ok", "supabase_connected": supabase is not None}
 
 
-# 매장 목록 조회 — 첫 번째 진짜 엔드포인트
 @app.get("/stores")
 def get_stores():
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase 연결이 설정되지 않았습니다 (.env 확인)")
     result = supabase.table("stores").select("*").execute()
     return result.data
+
+
+# ---------------------------------------------------------------------
+# 매장 등록
+# ---------------------------------------------------------------------
+
+class StoreCreate(BaseModel):
+    owner_id: str
+    name: str
+    address: str
+    category: Optional[str] = None
+    keywords: Optional[list[str]] = None
+
+
+async def geocode_address(address: str) -> tuple[float, float]:
+    """카카오 주소검색 API로 주소를 위도/경도로 변환"""
+    if not KAKAO_REST_API_KEY:
+        raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    url = "https://dapi.kakao.com/v2/local/search/address.json"
+    headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
+    params = {"query": address}
+
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers=headers, params=params)
+
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"카카오 주소 검색 실패 (status {res.status_code})")
+
+    data = res.json()
+    documents = data.get("documents", [])
+    if not documents:
+        raise HTTPException(status_code=400, detail=f"주소를 찾을 수 없습니다: {address}")
+
+    # 첫 번째 검색 결과 사용
+    doc = documents[0]
+    lat = float(doc["y"])
+    lng = float(doc["x"])
+    return lat, lng
+
+
+@app.post("/stores")
+async def create_store(payload: StoreCreate):
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Supabase 연결이 설정되지 않았습니다 (.env 확인)")
+
+    lat, lng = await geocode_address(payload.address)
+
+    row = {
+        "owner_id": payload.owner_id,
+        "name": payload.name,
+        "address": payload.address,
+        "category": payload.category,
+        "keywords": payload.keywords,
+        "lat": lat,
+        "lng": lng,
+    }
+
+    result = supabase.table("stores").insert(row).execute()
+    return result.data[0]
