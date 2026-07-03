@@ -1,115 +1,180 @@
-// ⚠️ 네이버 지도로 교체 시 이 파일만 바꾸면 됨.
-//    (내 위치·거리 계산은 lib/geo.js 에 있어 그대로 재사용, App/Home도 안 바뀜)
-import { useEffect, useState } from "react"
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
-import L from "leaflet"
-import "leaflet/dist/leaflet.css"
+// 카카오맵 버전 MapScreen
+// index.html 에 등록된 Kakao Maps SDK(&autoload=false)를 그대로 사용합니다.
+// 내 위치·거리 계산은 lib/geo.js 를 그대로 재사용, App/Home도 안 바뀝니다.
+import { useEffect, useRef, useState } from "react"
 import { stores, categories } from "../data/mockData"
 import { haversineKm, formatDistance } from "../lib/geo"
 
 // 지도 중심 (성수동 부근)
-const center = [37.5454, 127.0525]
+const CENTER = { lat: 37.5454, lng: 127.0525 }
 
-// 컨테이너 크기가 확정된 뒤 Leaflet에 "크기 다시 재라"고 알려줌 (회색 여백 방지)
-function ResizeFix() {
-  const map = useMap()
-  useEffect(() => {
-    map.invalidateSize()
-    const t = setTimeout(() => map.invalidateSize(), 200)
-    return () => clearTimeout(t)
-  }, [map])
-  return null
+// index.html 의 sdk.js 스크립트가 로드될 때까지 기다렸다가 kakao.maps.load 콜백을 프로미스로 감싸줌
+function loadKakaoMaps() {
+  return new Promise((resolve, reject) => {
+    if (window.kakao && window.kakao.maps) {
+      window.kakao.maps.load(() => resolve(window.kakao))
+      return
+    }
+    const script = document.querySelector('script[src*="dapi.kakao.com"]')
+    if (!script) {
+      reject(new Error("Kakao Maps SDK script를 index.html에서 찾을 수 없습니다."))
+      return
+    }
+    script.addEventListener("load", () => {
+      window.kakao.maps.load(() => resolve(window.kakao))
+    })
+    script.addEventListener("error", () => reject(new Error("Kakao Maps SDK 로드에 실패했습니다.")))
+  })
 }
 
-// 내 위치가 잡히면 그쪽으로 지도 이동
-function RecenterOnUser({ location }) {
-  const map = useMap()
-  useEffect(() => {
-    if (location) map.setView([location.lat, location.lng], 15)
-  }, [location, map])
-  return null
-}
-
-// 매장 핀 — 방문한 곳은 주황, 안 간 곳은 흰색
-function makeIcon(store) {
+// 매장 핀 HTML — 방문한 곳은 주황, 안 간 곳은 흰색 (Leaflet divIcon과 동일한 디자인)
+function makePinHtml(store) {
   const visited = store.myStamps > 0
   const bg = visited ? "#f59e0b" : "#ffffff"
   const border = visited ? "3px solid #ffffff" : "2px solid #cbd5e1"
   const opacity = visited ? "1" : "0.9"
-  return L.divIcon({
-    className: "",
-    html: `
-      <div style="
-        display:flex;align-items:center;justify-content:center;
-        width:40px;height:40px;
-        border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-        background:${bg};border:${border};
-        box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:${opacity};">
-        <span style="transform:rotate(45deg);font-size:20px;">${store.image}</span>
-      </div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40],
-    popupAnchor: [0, -38],
-  })
+  return `
+    <div style="
+      display:flex;align-items:center;justify-content:center;
+      width:40px;height:40px;
+      border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+      background:${bg};border:${border};
+      box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:${opacity};
+      cursor:pointer;">
+      <span style="transform:rotate(45deg);font-size:20px;">${store.image}</span>
+    </div>`
 }
 
-// 내 위치 파란 점
-const userIcon = L.divIcon({
-  className: "",
-  html: `<div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 5px rgba(59,130,246,.25)"></div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
-})
+// 내 위치 파란 점 HTML
+function makeUserHtml() {
+  return `<div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 5px rgba(59,130,246,.25)"></div>`
+}
 
 export default function MapScreen({ onSelectStore, myLocation, locating, onLocate }) {
+  const containerRef = useRef(null)
+  const mapRef = useRef(null)
+  const storeOverlaysRef = useRef([])
+  const userOverlayRef = useRef(null)
+  const popupOverlayRef = useRef(null)
+
   const [cat, setCat] = useState("전체")
+  const [mapReady, setMapReady] = useState(false)
+  const [sdkError, setSdkError] = useState(null)
+
   const visibleStores = stores.filter((s) => cat === "전체" || s.category === cat)
+
+  // 지도 최초 1회 생성
+  useEffect(() => {
+    let cancelled = false
+    loadKakaoMaps()
+      .then((kakao) => {
+        if (cancelled || !containerRef.current) return
+        const map = new kakao.maps.Map(containerRef.current, {
+          center: new kakao.maps.LatLng(CENTER.lat, CENTER.lng),
+          level: 4,
+        })
+        mapRef.current = map
+        setMapReady(true)
+      })
+      .catch((err) => setSdkError(err.message))
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // 매장 클릭 시 팝업(CustomOverlay) 표시
+  function showPopup(kakao, map, store, position) {
+    if (popupOverlayRef.current) popupOverlayRef.current.setMap(null)
+
+    const el = document.createElement("div")
+    el.innerHTML = `
+      <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
+        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${store.image} ${store.name}</p>
+        <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
+          ${store.category}${store.myStamps > 0 ? ` · 방문 ${store.myStamps}회 ✅` : " · 아직 안 감"}
+        </p>
+        ${
+          myLocation
+            ? `<p style="margin:2px 0 0;font-size:13px;font-weight:500;color:#d97706;">📍 여기서 ${formatDistance(
+                haversineKm(myLocation.lat, myLocation.lng, store.lat, store.lng)
+              )}</p>`
+            : ""
+        }
+        <button id="open-store-btn" style="margin-top:8px;width:100%;border:none;border-radius:8px;background:#f59e0b;padding:6px 0;font-size:13px;font-weight:500;color:white;cursor:pointer;">
+          매장 페이지 열기
+        </button>
+      </div>`
+
+    el.querySelector("#open-store-btn").addEventListener("click", () => onSelectStore(store))
+
+    const overlay = new kakao.maps.CustomOverlay({
+      position,
+      content: el,
+      yAnchor: 1.35,
+      zIndex: 10,
+    })
+    overlay.setMap(map)
+    popupOverlayRef.current = overlay
+  }
+
+  // 매장 마커 렌더링 (카테고리 필터 바뀔 때마다 다시 그림)
+  useEffect(() => {
+    if (!mapReady || !window.kakao) return
+    const kakao = window.kakao
+    const map = mapRef.current
+
+    storeOverlaysRef.current.forEach((o) => o.setMap(null))
+    storeOverlaysRef.current = []
+    if (popupOverlayRef.current) {
+      popupOverlayRef.current.setMap(null)
+      popupOverlayRef.current = null
+    }
+
+    visibleStores.forEach((s) => {
+      const position = new kakao.maps.LatLng(s.lat, s.lng)
+      const el = document.createElement("div")
+      el.innerHTML = makePinHtml(s)
+      el.addEventListener("click", () => showPopup(kakao, map, s, position))
+
+      const overlay = new kakao.maps.CustomOverlay({
+        position,
+        content: el,
+        yAnchor: 1,
+      })
+      overlay.setMap(map)
+      storeOverlaysRef.current.push(overlay)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, cat, myLocation])
+
+  // 내 위치 마커 표시 + 지도 이동 (Leaflet의 RecenterOnUser 역할)
+  useEffect(() => {
+    if (!mapReady || !window.kakao || !myLocation) return
+    const kakao = window.kakao
+    const map = mapRef.current
+    const position = new kakao.maps.LatLng(myLocation.lat, myLocation.lng)
+
+    if (userOverlayRef.current) userOverlayRef.current.setMap(null)
+    const el = document.createElement("div")
+    el.innerHTML = makeUserHtml()
+    const overlay = new kakao.maps.CustomOverlay({ position, content: el, yAnchor: 0.5 })
+    overlay.setMap(map)
+    userOverlayRef.current = overlay
+
+    map.setCenter(position)
+    map.setLevel(4)
+  }, [mapReady, myLocation])
 
   return (
     <div className="relative h-full">
-      <MapContainer center={center} zoom={15} scrollWheelZoom={true} className="h-full w-full">
-        <ResizeFix />
-        <RecenterOnUser location={myLocation} />
-        <TileLayer
-          attribution='&copy; OpenStreetMap'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+      <div ref={containerRef} className="h-full w-full" />
 
-        {/* 내 위치 마커 */}
-        {myLocation && (
-          <Marker position={[myLocation.lat, myLocation.lng]} icon={userIcon}>
-            <Popup>내 위치{myLocation.isDemo ? " (데모)" : ""}</Popup>
-          </Marker>
-        )}
-
-        {/* 매장 마커 (선택한 카테고리만) */}
-        {visibleStores.map((s) => (
-          <Marker key={s.id} position={[s.lat, s.lng]} icon={makeIcon(s)}>
-            <Popup>
-              <div className="min-w-[160px]">
-                <p className="text-base font-semibold text-slate-900">
-                  {s.image} {s.name}
-                </p>
-                <p className="text-sm text-slate-500">
-                  {s.category}
-                  {s.myStamps > 0 ? ` · 방문 ${s.myStamps}회 ✅` : " · 아직 안 감"}
-                </p>
-                {myLocation && (
-                  <p className="text-sm font-medium text-amber-600">
-                    📍 여기서 {formatDistance(haversineKm(myLocation.lat, myLocation.lng, s.lat, s.lng))}
-                  </p>
-                )}
-                <button
-                  onClick={() => onSelectStore(s)}
-                  className="mt-2 w-full rounded-lg bg-amber-500 py-1.5 text-sm font-medium text-white"
-                >
-                  매장 페이지 열기
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+      {sdkError && (
+        <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/90 px-6 text-center text-sm text-slate-500">
+          지도를 불러오지 못했습니다: {sdkError}
+        </div>
+      )}
 
       {/* 상단 카테고리 필터 */}
       <div className="absolute inset-x-0 top-0 z-[1000] flex gap-2 overflow-x-auto bg-gradient-to-b from-white/95 to-transparent px-3 py-3">
