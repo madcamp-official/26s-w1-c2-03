@@ -1,0 +1,250 @@
+# DB 스키마 — 맛짱 (Matzzang)
+
+> FE·BE 공용 계약서. B는 아래 SQL을 Supabase SQL Editor에 붙여넣어 테이블 생성.
+> FE는 각 테이블의 "컬럼(데이터 모양)"을 보고 화면/목데이터 제작.
+
+---
+
+## 테이블 관계 한눈에
+
+```
+owners ──< stores ──< checkins >── users
+             │            │
+             │            └── purpose: 외식/카공/혼술/혼밥/회식
+             └──< rewards ──< user_rewards >── users
+
+users ──< user_badges >── badges
+users ──< reviews >── stores
+```
+
+- `A ──< B` : A 하나에 B가 여러 개 (1:N)
+- 예: owner 한 명이 store 여러 개, store 하나에 checkin 여러 개
+
+---
+
+## 1. 핵심 테이블
+
+### owners (사장님 — 매장 등록·인증 수락 주체)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| email | text | 로그인 이메일 (사장님은 이메일이 로그인 아이디) |
+| password_hash | text | 비밀번호 **해시값** (원문 저장 금지) |
+| name | text | 사장님/담당자 이름 |
+| created_at | timestamptz | 가입 시각 |
+
+### stores (매장 — 사장님이 직접 등록)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 (자동 생성) |
+| owner_id | uuid | 등록한 사장님 (→ owners) |
+| name | text | 매장 이름 *(사장님 입력)* |
+| address | text | 주소 *(사장님 입력)* |
+| category | text | 카페 / 한식 / 일식 / 디저트 … *(사장님 선택)* |
+| keywords | text[] | 키워드 배열 (예: {분위기좋은, 조용한, 디저트맛집}) *(사장님 입력)* |
+| lat | double | 위도 — 주소를 좌표로 자동 변환(카카오 API), 폼 입력 아님 |
+| lng | double | 경도 — 위와 동일 |
+| created_at | timestamptz | 등록 시각 |
+
+### users (손님)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| login_id | text | 로그인 아이디 (중복 불가) |
+| password_hash | text | 비밀번호 **해시값** (원문 저장 금지) |
+| nickname | text | 닉네임 (지도·랭킹에 표시) |
+| created_at | timestamptz | 가입 시각 |
+
+### checkins (방문 인증 — 서비스의 심장)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| user_id | uuid | 누가 (→ users) |
+| store_id | uuid | 어느 매장 (→ stores) |
+| photo_url | text | 음식 사진 주소 (Supabase Storage) |
+| purpose | text | 방문 목적: 외식 / 카공 / 혼술 / 혼밥 / 회식 … |
+| status | text | pending(대기) / approved(수락) / rejected(거절) |
+| created_at | timestamptz | 인증 요청 시각 |
+| reviewed_at | timestamptz | 사장님이 수락·거절한 시각 |
+
+> 스탬프 수·랭킹은 여기서 계산: `status='approved'` 인 checkin 개수를 세면 됨.
+
+---
+
+## 2. 게임 요소 테이블
+
+### badges (뱃지 정의 — 관리자가 미리 등록)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| name | text | 뱃지 이름 (예: 카페 마스터) |
+| description | text | 설명 |
+| type | text | store / category / region / activity |
+| icon | text | 이모지 또는 이미지 주소 |
+| condition_count | int | 달성 횟수 (예: 20) |
+| condition_target | text | 대상 (특정 store_id 또는 category 값) |
+
+### user_badges (획득 기록)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| user_id | uuid | 누가 (→ users) |
+| badge_id | uuid | 어떤 뱃지 (→ badges) |
+| earned_at | timestamptz | 획득 시각 |
+
+### rewards (사장님이 등록한 혜택)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| store_id | uuid | 어느 매장 (→ stores) |
+| title | text | 혜택 이름 (예: 아메리카노 무료) |
+| description | text | 설명 |
+| type | text | instant_stamp(즉시형) / monthly_rank(월별랭킹) |
+| stamp_goal | int | 즉시형: 스탬프 N개 모으면 |
+| rank_threshold | int | 랭킹형: 상위 N위까지 |
+| is_active | boolean | 진행 중 여부 |
+| created_at | timestamptz | 등록 시각 |
+
+---
+
+## 3. 보조 테이블
+
+### user_rewards (발급된 쿠폰)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| user_id | uuid | 누가 (→ users) |
+| reward_id | uuid | 어떤 리워드 (→ rewards) |
+| status | text | issued(발급) / used(사용완료) |
+| issued_at | timestamptz | 발급 시각 |
+| used_at | timestamptz | 사용 시각 |
+
+### reviews (자체 리뷰 — 리뷰왕 칭호용)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| user_id | uuid | 누가 (→ users) |
+| store_id | uuid | 어느 매장 (→ stores) |
+| rating | int | 별점 1~5 |
+| content | text | 리뷰 내용 |
+| created_at | timestamptz | 작성 시각 |
+
+---
+
+## Supabase 실행용 SQL
+
+> Supabase 대시보드 → SQL Editor → New query → 아래 붙여넣고 Run
+
+```sql
+-- 1. 사장님
+create table owners (
+  id uuid primary key default gen_random_uuid(),
+  email text unique,                -- 사장님은 이메일이 로그인 아이디
+  password_hash text,               -- 비밀번호 해시 (원문 저장 금지)
+  name text,
+  created_at timestamptz default now()
+);
+
+-- 2. 매장 (사장님이 직접 등록)
+create table stores (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid references owners(id),
+  name text not null,
+  address text,
+  category text,
+  keywords text[],                  -- 예: '{분위기좋은, 조용한, 디저트맛집}'
+  lat double precision,             -- 주소 → 좌표 자동 변환(카카오 API)
+  lng double precision,
+  created_at timestamptz default now()
+);
+
+-- 3. 손님
+create table users (
+  id uuid primary key default gen_random_uuid(),
+  login_id text unique not null,    -- 로그인 아이디 (중복 불가)
+  password_hash text not null,      -- 비밀번호 해시 (원문 저장 금지)
+  nickname text not null,
+  created_at timestamptz default now()
+);
+
+-- 4. 방문 인증 (핵심)
+create table checkins (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  store_id uuid references stores(id),
+  photo_url text,
+  purpose text,                     -- 외식 / 카공 / 혼술 / 혼밥 / 회식
+  status text default 'pending',    -- pending / approved / rejected
+  created_at timestamptz default now(),
+  reviewed_at timestamptz
+);
+
+-- 5. 뱃지 정의
+create table badges (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  type text,                        -- store / category / region / activity
+  icon text,
+  condition_count int,
+  condition_target text
+);
+
+-- 6. 뱃지 획득 기록
+create table user_badges (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  badge_id uuid references badges(id),
+  earned_at timestamptz default now(),
+  unique (user_id, badge_id)
+);
+
+-- 7. 사장님 리워드
+create table rewards (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid references stores(id),
+  title text not null,
+  description text,
+  type text,                        -- instant_stamp / monthly_rank
+  stamp_goal int,
+  rank_threshold int,
+  is_active boolean default true,
+  created_at timestamptz default now()
+);
+
+-- 8. 발급된 쿠폰
+create table user_rewards (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  reward_id uuid references rewards(id),
+  status text default 'issued',     -- issued / used
+  issued_at timestamptz default now(),
+  used_at timestamptz
+);
+
+-- 9. 자체 리뷰
+create table reviews (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id),
+  store_id uuid references stores(id),
+  rating int,
+  content text,
+  created_at timestamptz default now()
+);
+
+-- 자주 조회하는 컬럼에 인덱스 (조회 속도 ↑)
+create index idx_checkins_store on checkins(store_id);
+create index idx_checkins_user on checkins(user_id);
+create index idx_checkins_status on checkins(status);
+```
+
+---
+
+## MVP 진행 순서 (이 스키마 기준)
+
+1. `owners` + `stores` → 사장님이 매장 등록 (이름/주소/카테고리/키워드)
+2. `users` + `checkins` → 사진 + 방문목적 인증 → 사장님 수락 루프 완성 (핵심)
+3. `badges` + `user_badges` → 뱃지 획득
+4. 랭킹 화면 (checkins 계산으로 구현, 새 테이블 불필요)
+5. `rewards` + `user_rewards` → 사장님 리워드 (여유 시)
+6. `reviews` → 리뷰왕 (여유 시)

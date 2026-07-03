@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Node (프론트엔드는 frontend/.gitignore도 있음)
+node_modules/
+dist/
+*.log
+
+# 환경변수 (비밀키 절대 커밋 금지)
+.env
+.env.local
+.env.*.local
+
+# Claude Code 로컬 설정 (개인용)
+.claude/

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- 배경: 대비를 낮춘 부드러운 슬레이트 블루 -->
+    <linearGradient id="gameBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#33425C" />
+      <stop offset="100%" stop-color="#232F45" />
+    </linearGradient>
+
+    <!-- 메인 키컬러 그라데이션 (FE9A00 기반의 활력 넘치는 골드-오렌지) -->
+    <linearGradient id="keyColorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF099" />
+      <stop offset="30%" stop-color="#FE9A00" />
+      <stop offset="100%" stop-color="#D66200" />
+    </linearGradient>
+
+    <!-- 사이버네틱 네온 블루 그라데이션 (필드 및 오라 효과) -->
+    <linearGradient id="neonBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00F0FF" />
+      <stop offset="100%" stop-color="#0072FF" />
+    </linearGradient>
+
+    <!-- 게이밍 그래픽 느낌을 위한 발광(Glow) 효과 -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="epicShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#FE9A00" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- 1. 앱 아이콘 베이스 (둥근 사각형) -->
+  <rect width="512" height="512" rx="112" fill="url(#gameBg)" />
+
+  <!-- 2. 포켓몬GO 스타일 3D 회전 필드 (원형 맵 발광 레이어) -->
+  <g transform="translate(256, 380) scale(1, 0.45)">
+    <circle cx="0" cy="0" r="180" fill="none" stroke="url(#neonBlue)" stroke-width="6" opacity="0.4" />
+    <circle cx="0" cy="0" r="140" fill="none" stroke="url(#neonBlue)" stroke-width="3" stroke-dasharray="12 10" opacity="0.6" />
+    <circle cx="0" cy="0" r="100" fill="url(#neonBlue)" opacity="0.15" filter="url(#neonGlow)" />
+    <circle cx="0" cy="0" r="100" fill="none" stroke="#00F0FF" stroke-width="8" filter="url(#neonGlow)" />
+    <line x1="-100" y1="0" x2="100" y2="0" stroke="#00F0FF" stroke-width="2" opacity="0.5" />
+    <line x1="0" y1="-100" x2="0" y2="100" stroke="#00F0FF" stroke-width="2" opacity="0.5" />
+  </g>
+
+  <!-- 3. 위에서 필드로 내리꽂히는 '정복의 포크' -->
+  <g filter="url(#epicShadow)">
+    <line x1="256" y1="80" x2="256" y2="380" stroke="#00F0FF" stroke-width="4" opacity="0.3" filter="url(#neonGlow)" />
+    <g transform="translate(196, 70)">
+      <path d="M 10,20 L 110,20 L 105,110 Q 105,150 68,150 L 52,150 Q 15,150 15,110 Z" fill="url(#keyColorGrad)" />
+      <rect x="36" y="10" width="12" height="75" rx="6" fill="#2A3852" />
+      <rect x="72" y="10" width="12" height="75" rx="6" fill="#2A3852" />
+      <path d="M 54,150 L 66,150 L 63,300 L 57,300 Z" fill="url(#keyColorGrad)" />
+      <path d="M 66,170 C 100,160 110,190 140,180 L 140,220 C 110,230 100,200 65,210 Z" fill="#00F0FF" opacity="0.8" filter="url(#neonGlow)" />
+    </g>
+  </g>
+
+  <!-- 4. 수집/정복 성공 스파클 -->
+  <path d="M 390,100 L 395,115 L 410,115 L 398,125 L 402,140 L 390,130 L 378,140 L 382,125 L 370,115 L 385,115 Z" fill="#FFD700" filter="url(#neonGlow)" />
+  <path d="M 120,280 L 123,290 L 133,290 L 125,296 L 128,306 L 120,300 L 112,306 L 115,296 L 107,290 L 117,290 Z" fill="#00F0FF" filter="url(#neonGlow)" />
+  <circle cx="256" cy="70" r="6" fill="#FFFFFF" filter="url(#neonGlow)" />
+</svg>
