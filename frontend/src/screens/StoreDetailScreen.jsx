@@ -1,5 +1,7 @@
-// 매장 상세 — 정보 + 내 스탬프 + 방문 랭킹 + 리워드 + 인증 버튼
-// 랭킹/리워드는 아직 백엔드에 없어서, 데이터가 있을 때만 섹션을 보여줌 (없으면 숨김, 크래시 방지)
+// 매장 상세 — 정보 + 내 스탬프 + 인증 버튼 + 방문 랭킹 + 리워드
+// 리워드는 아직 백엔드에 없어서, 데이터가 있을 때만 섹션을 보여줌 (없으면 숨김, 크래시 방지)
+import { useEffect, useState } from "react"
+import { getStoreRanking } from "../lib/api"
 
 const CATEGORY_EMOJI = {
   카페: "☕",
@@ -16,12 +18,21 @@ function emojiFor(categories) {
   return CATEGORY_EMOJI[first] || "🍽️"
 }
 
-export default function StoreDetailScreen({ store, onBack, onCheckin }) {
+export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectProfile }) {
+  const [ranking, setRanking] = useState(null)
+
+  useEffect(() => {
+    if (!store) return
+    setRanking(null)
+    getStoreRanking(store.id)
+      .then(setRanking)
+      .catch(() => setRanking([]))
+  }, [store?.id])
+
   if (!store) return null
 
   const categories = store.categories || []
   const keywords = store.keywords || []
-  const topVisitors = store.topVisitors || []
   const rewards = store.rewards || []
 
   return (
@@ -61,24 +72,6 @@ export default function StoreDetailScreen({ store, onBack, onCheckin }) {
           </p>
         </div>
 
-        {/* 방문 랭킹 — 데이터 있을 때만 표시 (아직 백엔드에 랭킹 API 없음) */}
-        {topVisitors.length > 0 && (
-          <section className="mt-6">
-            <h3 className="mb-2 font-semibold text-slate-900">방문 랭킹</h3>
-            <div className="space-y-1.5">
-              {topVisitors.map((v) => (
-                <div key={v.rank} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5">
-                  <span className="text-slate-700">
-                    <b className="mr-2 text-amber-600">{v.rank}위</b>
-                    {v.nickname}
-                  </span>
-                  <span className="text-sm text-slate-400">{v.count}회</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* 사장님 리워드 — 데이터 있을 때만 표시 (아직 백엔드에 리워드 API 없음) */}
         {rewards.length > 0 && (
           <section className="mt-6">
@@ -101,6 +94,32 @@ export default function StoreDetailScreen({ store, onBack, onCheckin }) {
         >
           📸 방문 인증하기
         </button>
+      </div>
+
+      {/* 방문 랭킹 — 이 매장에서 승인된 체크인 기준 실제 데이터. 프로필을 눌러도 뱃지만 보여줌 (동선 노출 방지) */}
+      <div className="px-5 pt-6">
+        <h3 className="mb-2 font-semibold text-slate-900">방문 랭킹</h3>
+        {ranking === null ? (
+          <p className="text-sm text-slate-400">불러오는 중...</p>
+        ) : ranking.length === 0 ? (
+          <p className="text-sm text-slate-400">아직 방문 인증 기록이 없어요</p>
+        ) : (
+          <div className="space-y-1.5">
+            {ranking.slice(0, 20).map((v, i) => (
+              <button
+                key={v.user_id}
+                onClick={() => onSelectProfile(v)}
+                className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5 text-left"
+              >
+                <span className="text-slate-700">
+                  <b className="mr-2 text-amber-600">{i + 1}위</b>
+                  {v.nickname}
+                </span>
+                <span className="text-sm text-slate-400">{v.count}회</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

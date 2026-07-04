@@ -4,6 +4,7 @@ import MapScreen from "./screens/MapScreen"
 import StoreDetailScreen from "./screens/StoreDetailScreen"
 import CheckinScreen from "./screens/CheckinScreen"
 import MyPageScreen from "./screens/MyPageScreen"
+import UserProfileScreen from "./screens/UserProfileScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
 import { loginWithKakao } from "./lib/api"
@@ -23,6 +24,7 @@ export default function CustomerApp({ onGoOwner }) {
   const [selectedStore, setSelectedStore] = useState(null)
   const [prevScreen, setPrevScreen] = useState("home") // 매장 상세에서 뒤로가기 시 돌아갈 곳(홈/지도)
   const [checkinReturnTo, setCheckinReturnTo] = useState("detail") // 인증 화면에서 뒤로가기 시 돌아갈 곳
+  const [selectedProfileUser, setSelectedProfileUser] = useState(null) // 방문 랭킹에서 클릭한 유저
 
   const [myLocation, setMyLocation] = useState(null)
   const [locating, setLocating] = useState(false)
@@ -106,6 +108,12 @@ export default function CustomerApp({ onGoOwner }) {
     setScreen("checkin")
   }
 
+  // 매장 상세의 방문 랭킹에서 다른 유저 프로필(획득 뱃지) 보러 갈 때
+  const openProfile = (rankingEntry) => {
+    setSelectedProfileUser(rankingEntry)
+    setScreen("profile")
+  }
+
   const locateMe = async () => {
     setLocating(true)
     const loc = await getMyLocation()
@@ -153,7 +161,11 @@ export default function CustomerApp({ onGoOwner }) {
             store={selectedStore}
             onBack={() => setScreen(prevScreen)}
             onCheckin={openCheckinFromDetail}
+            onSelectProfile={openProfile}
           />
+        )}
+        {screen === "profile" && (
+          <UserProfileScreen profileUser={selectedProfileUser} onBack={() => setScreen("detail")} />
         )}
         {screen === "checkin" && (
           <CheckinScreen
