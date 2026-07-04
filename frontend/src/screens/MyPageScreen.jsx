@@ -58,7 +58,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode }) {
           </div>
         </section>
 
-        {/* 사장님 모드 — 등록된 사장님 아이디만 보임 */}
+        {/* 사장님 모드 — 카카오 로그인 계정이면 누구나 진입 가능. 매장 등록 여부는 OwnerApp에서 판단 */}
         {onEnterOwnerMode && (
           <button
             onClick={onEnterOwnerMode}

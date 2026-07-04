@@ -26,8 +26,11 @@ export function checkHealth() {
   return requestJSON("/health")
 }
 
-export function getStores() {
-  return requestJSON("/stores")
+export function getStores({ ownerId } = {}) {
+  const params = new URLSearchParams()
+  if (ownerId) params.set("owner_id", ownerId)
+  const query = params.toString() ? `?${params.toString()}` : ""
+  return requestJSON(`/stores${query}`)
 }
 
 // 기존 간단 로그인 방식 (카카오 로그인 도입 후에도 백업용으로 남겨둠)

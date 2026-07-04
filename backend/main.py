@@ -60,9 +60,12 @@ def health():
 # ---------------------------------------------------------------------
 
 @app.get("/stores")
-def get_stores():
+def get_stores(owner_id: Optional[str] = None):
     db = require_supabase()
-    result = safe_execute(db.table("stores").select("*"), "매장 목록 조회 실패")
+    query = db.table("stores").select("*")
+    if owner_id:
+        query = query.eq("owner_id", owner_id)
+    result = safe_execute(query, "매장 목록 조회 실패")
     return result.data
 
 
@@ -108,6 +111,15 @@ async def geocode_address(address: str) -> dict:
 async def create_store(payload: StoreCreate):
     db = require_supabase()
     geo = await geocode_address(payload.address)
+
+    # owner_id는 이제 카카오로 로그인한 users.id를 그대로 씀 (별도 사장님 회원가입 없음).
+    # stores.owner_id는 owners 테이블을 참조하므로, 아직 owners에 같은 id가 없으면 먼저 만들어줌
+    # (owners는 email/name 등은 비워두고 사실상 users와 같은 id를 쓰는 그림자 테이블로 사용).
+    existing_owner = safe_execute(
+        db.table("owners").select("id").eq("id", payload.owner_id), "사장님 확인 실패"
+    )
+    if not existing_owner.data:
+        safe_execute(db.table("owners").insert({"id": payload.owner_id}), "사장님 등록 실패")
 
     row = {
         "owner_id": payload.owner_id,
@@ -237,7 +249,8 @@ async def kakao_login(payload: KakaoLoginRequest):
 @app.get("/checkins")
 def get_checkins(store_id: Optional[str] = None, status: Optional[str] = None):
     db = require_supabase()
-    query = db.table("checkins").select("*")
+    # users(nickname)으로 함께 조회 → 사장님 화면에 "누가 보냈는지" 같이 보여줄 수 있음
+    query = db.table("checkins").select("*, users(nickname)")
     if store_id:
         query = query.eq("store_id", store_id)
     if status:

@@ -2,12 +2,10 @@ import { useState } from "react"
 import { categories } from "../data/mockData"
 import { createStore } from "../lib/api"
 
-// ⚠️ 사장님 로그인/회원가입이 아직 백엔드에 없어서, 지금은 owner_id를 직접 입력받는 임시 방식.
-//    나중에 사장님 로그인이 생기면 이 입력칸은 없애고 로그인한 owner_id를 자동으로 씀.
 const STORE_CATEGORIES = categories.filter((c) => c !== "전체")
 
-export default function OwnerDashboardScreen() {
-  const [ownerId, setOwnerId] = useState("")
+// 매장 등록 — ownerId는 로그인한 계정(카카오)의 id를 그대로 씀
+export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
   const [name, setName] = useState("")
   const [address, setAddress] = useState("")
   const [category, setCategory] = useState(STORE_CATEGORIES[0])
@@ -15,9 +13,8 @@ export default function OwnerDashboardScreen() {
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
-  const [registered, setRegistered] = useState(null) // 방금 등록된 매장
 
-  const canSubmit = ownerId.trim() && name.trim() && address.trim() && !submitting
+  const canSubmit = name.trim() && address.trim() && !submitting
 
   const handleSubmit = async () => {
     setSubmitting(true)
@@ -28,14 +25,10 @@ export default function OwnerDashboardScreen() {
         .map((k) => k.trim())
         .filter(Boolean)
 
-      const store = await createStore({ ownerId: ownerId.trim(), name, address, category, keywords })
-      setRegistered(store)
-      setName("")
-      setAddress("")
-      setKeywordsInput("")
+      const store = await createStore({ ownerId, name, address, category, keywords })
+      onRegistered(store)
     } catch (e) {
       setError(e.message || "매장 등록에 실패했어요")
-    } finally {
       setSubmitting(false)
     }
   }
@@ -45,14 +38,6 @@ export default function OwnerDashboardScreen() {
       <h2 className="mb-4 text-lg font-semibold text-slate-900">매장 등록</h2>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-slate-600">사장님 ID</label>
-        <input
-          value={ownerId}
-          onChange={(e) => setOwnerId(e.target.value)}
-          placeholder="owners 테이블의 id (임시)"
-          className="mb-4 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-amber-400"
-        />
-
         <label className="mb-1 block text-sm font-medium text-slate-600">매장 이름</label>
         <input
           value={name}
@@ -90,12 +75,6 @@ export default function OwnerDashboardScreen() {
         />
 
         {error && <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-500">{error}</p>}
-
-        {registered && (
-          <div className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            ✅ <b>{registered.name}</b> 등록 완료! (위도 {registered.lat}, 경도 {registered.lng})
-          </div>
-        )}
 
         <button
           onClick={handleSubmit}

@@ -1,20 +1,32 @@
-import { useState } from "react"
-import { pendingCheckins as initialCheckins } from "../data/mockData"
+import { useEffect, useState } from "react"
+import { getCheckins, reviewCheckin } from "../lib/api"
 
-// 사장님 — 손님이 올린 방문 인증 요청을 수락/거절 (본인 가게 요청만)
-// ⚠️ 지금은 목데이터 + 화면 안에서만 상태 변경. 백엔드에 아래 엔드포인트가 생기면 연결:
-//    - 목록 조회: GET /stores/{store_id}/checkins?status=pending  (내 store_id로 이미 필터됨)
-//    - 수락/거절: PATCH /checkins/{checkin_id}  body: { status: "approved" | "rejected" }
-export default function OwnerCheckinsScreen({ storeName }) {
-  // 로그인한 사장님의 가게에 온 요청만 남김
-  const myCheckins = initialCheckins.filter((c) => c.storeName === storeName)
-  const [checkins, setCheckins] = useState(myCheckins)
+// 사장님 — 이 매장(storeId)에 온 방문 인증 요청을 실제 백엔드에서 불러와 수락/거절
+export default function OwnerCheckinsScreen({ storeId }) {
+  const [checkins, setCheckins] = useState(null) // null = 로딩 중
+  const [error, setError] = useState("")
+  const [reviewingId, setReviewingId] = useState(null) // 지금 수락/거절 처리 중인 요청
 
-  const pending = checkins.filter((c) => c.status === "pending")
-  const done = checkins.filter((c) => c.status !== "pending")
+  const load = () => {
+    setError("")
+    getCheckins({ storeId, status: "pending" })
+      .then(setCheckins)
+      .catch((e) => setError(e.message || "인증 요청을 불러오지 못했어요"))
+  }
 
-  const review = (id, status) => {
-    setCheckins((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)))
+  useEffect(load, [storeId])
+
+  const review = async (checkinId, status) => {
+    setReviewingId(checkinId)
+    try {
+      await reviewCheckin({ checkinId, status })
+      // 처리된 건 대기 목록에서 바로 제거 (재조회 없이 즉시 반영)
+      setCheckins((prev) => prev.filter((c) => c.id !== checkinId))
+    } catch (e) {
+      setError(e.message || "처리에 실패했어요")
+    } finally {
+      setReviewingId(null)
+    }
   }
 
   return (
@@ -24,73 +36,57 @@ export default function OwnerCheckinsScreen({ storeName }) {
         손님이 보낸 방문 사진을 확인하고 수락하면 스탬프가 바로 적립돼요.
       </p>
 
-      {pending.length === 0 && (
+      {error && <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-500">{error}</p>}
+
+      {checkins === null && <p className="py-10 text-center text-sm text-slate-400">불러오는 중...</p>}
+
+      {checkins?.length === 0 && (
         <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
           지금은 대기 중인 요청이 없어요 🎉
         </p>
       )}
 
       <div className="space-y-3">
-        {pending.map((c) => (
+        {checkins?.map((c) => (
           <div key={c.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-50 text-2xl">
-                {c.photoEmoji}
-              </div>
+              {c.photo_url ? (
+                <img
+                  src={c.photo_url}
+                  alt="방문 인증 사진"
+                  className="h-16 w-16 shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-2xl">
+                  📷
+                </div>
+              )}
               <div className="flex-1">
-                <p className="font-semibold text-slate-900">{c.nickname}</p>
-                <p className="text-sm text-slate-500">
-                  {c.storeName} · {c.purpose}
-                </p>
-                <p className="text-xs text-slate-400">{c.requestedAt}</p>
+                <p className="font-semibold text-slate-900">{c.users?.nickname || "알 수 없음"}</p>
+                <p className="text-sm text-slate-500">{c.purpose || "방문 목적 미지정"}</p>
+                <p className="text-xs text-slate-400">{new Date(c.created_at).toLocaleString("ko-KR")}</p>
               </div>
             </div>
 
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => review(c.id, "rejected")}
-                className="flex-1 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-500"
+                disabled={reviewingId === c.id}
+                className="flex-1 rounded-xl bg-slate-100 py-2.5 text-sm font-medium text-slate-500 disabled:opacity-50"
               >
                 거절
               </button>
               <button
                 onClick={() => review(c.id, "approved")}
-                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white"
+                disabled={reviewingId === c.id}
+                className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
-                수락
+                {reviewingId === c.id ? "처리 중..." : "수락"}
               </button>
             </div>
           </div>
         ))}
       </div>
-
-      {done.length > 0 && (
-        <>
-          <h3 className="mt-8 mb-2 text-sm font-semibold text-slate-500">처리 완료</h3>
-          <div className="space-y-2">
-            {done.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 opacity-70"
-              >
-                <span className="text-xl">{c.photoEmoji}</span>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-700">
-                    {c.nickname} · {c.storeName}
-                  </p>
-                </div>
-                <span
-                  className={`text-xs font-medium ${
-                    c.status === "approved" ? "text-amber-600" : "text-slate-400"
-                  }`}
-                >
-                  {c.status === "approved" ? "✅ 수락됨" : "✕ 거절됨"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   )
 }
