@@ -51,14 +51,10 @@ def health():
 @app.get("/stores")
 def get_stores(owner_id: Optional[str] = None):
     db = require_supabase()
-<<<<<<< HEAD
-    result = db.table("stores").select("*").execute()
-=======
     query = db.table("stores").select("*")
     if owner_id:
         query = query.eq("owner_id", owner_id)
     result = safe_execute(query, "매장 목록 조회 실패")
->>>>>>> 23c159502a407321fee2506519daaf7b13f56dea
     return result.data
 
 

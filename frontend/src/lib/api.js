@@ -25,6 +25,15 @@ async function requestForm(path, formData) {
   return res.json()
 }
 
+async function requestDelete(path) {
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE" })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail.detail || `요청 실패: ${res.status}`)
+  }
+  return res.json()
+}
+
 export function checkHealth() {
   return requestJSON("/health")
 }
@@ -99,13 +108,8 @@ export function createCategoryOption(name) {
   })
 }
 
-export async function deleteCategoryOption(id) {
-  const res = await fetch(`${API_BASE_URL}/admin/categories/${id}`, { method: "DELETE" })
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}))
-    throw new Error(detail.detail || `요청 실패: ${res.status}`)
-  }
-  return res.json()
+export function deleteCategoryOption(id) {
+  return requestDelete(`/admin/categories/${id}`)
 }
 
 // 키워드 선택지 (매장 등록 폼 / 뱃지 조건 폼에서 공용으로 사용)
@@ -120,13 +124,8 @@ export function createKeywordOption(name) {
   })
 }
 
-export async function deleteKeywordOption(id) {
-  const res = await fetch(`${API_BASE_URL}/admin/keywords/${id}`, { method: "DELETE" })
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}))
-    throw new Error(detail.detail || `요청 실패: ${res.status}`)
-  }
-  return res.json()
+export function deleteKeywordOption(id) {
+  return requestDelete(`/admin/keywords/${id}`)
 }
 
 // 체크인 목록 조회 (사장님 대시보드의 승인 대기 목록 / 마이페이지의 내 방문 기록에서 사용)
@@ -169,11 +168,6 @@ export function createBadge({ name, description, emoji, conditions, imageBlob })
 }
 
 // 관리자 — 뱃지 삭제
-export async function deleteBadge(badgeId) {
-  const res = await fetch(`${API_BASE_URL}/admin/badges/${badgeId}`, { method: "DELETE" })
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}))
-    throw new Error(detail.detail || `요청 실패: ${res.status}`)
-  }
-  return res.json()
+export function deleteBadge(badgeId) {
+  return requestDelete(`/admin/badges/${badgeId}`)
 }
