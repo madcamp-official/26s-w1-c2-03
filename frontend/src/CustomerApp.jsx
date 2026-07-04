@@ -21,7 +21,8 @@ export default function CustomerApp({ onGoOwner }) {
 
   const [screen, setScreen] = useState("home")
   const [selectedStore, setSelectedStore] = useState(null)
-  const [prevScreen, setPrevScreen] = useState("home")
+  const [prevScreen, setPrevScreen] = useState("home") // 매장 상세에서 뒤로가기 시 돌아갈 곳(홈/지도)
+  const [checkinReturnTo, setCheckinReturnTo] = useState("detail") // 인증 화면에서 뒤로가기 시 돌아갈 곳
 
   const [myLocation, setMyLocation] = useState(null)
   const [locating, setLocating] = useState(false)
@@ -92,6 +93,19 @@ export default function CustomerApp({ onGoOwner }) {
     setScreen("detail")
   }
 
+  // 매장 상세를 거쳐서 인증하러 갈 때
+  const openCheckinFromDetail = () => {
+    setCheckinReturnTo("detail")
+    setScreen("checkin")
+  }
+
+  // 마이페이지의 "내가 방문한 곳"에서 바로 인증하러 갈 때 (상세 화면 건너뜀)
+  const openCheckinDirect = (store) => {
+    setSelectedStore(store)
+    setCheckinReturnTo("my")
+    setScreen("checkin")
+  }
+
   const locateMe = async () => {
     setLocating(true)
     const loc = await getMyLocation()
@@ -138,19 +152,24 @@ export default function CustomerApp({ onGoOwner }) {
           <StoreDetailScreen
             store={selectedStore}
             onBack={() => setScreen(prevScreen)}
-            onCheckin={() => setScreen("checkin")}
+            onCheckin={openCheckinFromDetail}
           />
         )}
         {screen === "checkin" && (
           <CheckinScreen
             store={selectedStore}
             user={user}
-            onBack={() => setScreen("detail")}
-            onDone={() => setScreen("home")}
+            onBack={() => setScreen(checkinReturnTo)}
+            onDone={() => setScreen(checkinReturnTo === "my" ? "my" : "home")}
           />
         )}
         {screen === "my" && (
-          <MyPageScreen user={user} onLogout={logout} onEnterOwnerMode={() => onGoOwner(user)} />
+          <MyPageScreen
+            user={user}
+            onLogout={logout}
+            onEnterOwnerMode={() => onGoOwner(user)}
+            onSendPhoto={openCheckinDirect}
+          />
         )}
       </main>
 

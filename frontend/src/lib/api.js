@@ -79,10 +79,11 @@ export function createStore({ ownerId, name, address, category, keywords }) {
   })
 }
 
-// 체크인 목록 조회 (사장님 대시보드에서 승인 대기 목록 볼 때 사용)
-export function getCheckins({ storeId, status } = {}) {
+// 체크인 목록 조회 (사장님 대시보드의 승인 대기 목록 / 마이페이지의 내 방문 기록에서 사용)
+export function getCheckins({ storeId, userId, status } = {}) {
   const params = new URLSearchParams()
   if (storeId) params.set("store_id", storeId)
+  if (userId) params.set("user_id", userId)
   if (status) params.set("status", status)
   const query = params.toString() ? `?${params.toString()}` : ""
   return requestJSON(`/checkins${query}`)
@@ -94,4 +95,35 @@ export function reviewCheckin({ checkinId, status }) {
     method: "PATCH",
     body: JSON.stringify({ status }),
   })
+}
+
+// 뱃지 목록 (조건 포함)
+export function getBadges() {
+  return requestJSON("/badges")
+}
+
+// 유저별 뱃지 획득 여부 (실제 승인된 체크인 기준으로 서버가 계산해서 내려줌)
+export function getUserBadges(userId) {
+  return requestJSON(`/users/${userId}/badges`)
+}
+
+// 관리자 — 뱃지 생성 (이모지 또는 이미지 + 조건 여러 개)
+export function createBadge({ name, description, emoji, conditions, imageBlob }) {
+  const formData = new FormData()
+  formData.append("name", name)
+  if (description) formData.append("description", description)
+  if (emoji) formData.append("emoji", emoji)
+  formData.append("conditions", JSON.stringify(conditions))
+  if (imageBlob) formData.append("image", imageBlob, "badge.png")
+  return requestForm("/admin/badges", formData)
+}
+
+// 관리자 — 뱃지 삭제
+export async function deleteBadge(badgeId) {
+  const res = await fetch(`${API_BASE_URL}/admin/badges/${badgeId}`, { method: "DELETE" })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail.detail || `요청 실패: ${res.status}`)
+  }
+  return res.json()
 }
