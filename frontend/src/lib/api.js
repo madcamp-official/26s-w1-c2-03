@@ -1,8 +1,4 @@
-// FastAPI 백엔드 호출 전용 모듈
-// 접속한 주소를 기준으로 자동 결정: PC에서 localhost로 열면 localhost:8000,
-// 폰에서 네트워크 IP로 열면 같은 IP의 8000번 포트를 자동으로 바라봄
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:8000`
+const API_BASE_URL = '/api';
 
 async function requestJSON(path, options = {}) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
