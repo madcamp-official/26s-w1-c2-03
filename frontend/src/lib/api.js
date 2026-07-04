@@ -66,17 +66,59 @@ export function createCheckin({ userId, storeId, purpose, photoFile }) {
 }
 
 // 매장 등록 (사장님 대시보드용) — 주소는 백엔드에서 카카오 API로 좌표/시도/구군 자동 변환됨
-export function createStore({ ownerId, name, address, category, keywords }) {
+export function createStore({ ownerId, name, address, categories, keywords }) {
   return requestJSON("/stores", {
     method: "POST",
     body: JSON.stringify({
       owner_id: ownerId,
       name,
       address,
-      category,
+      categories,
       keywords,
     }),
   })
+}
+
+// 카테고리 선택지 (매장 등록 폼 / 뱃지 조건 폼에서 공용으로 사용)
+export function getCategoryOptions() {
+  return requestJSON("/categories")
+}
+
+export function createCategoryOption(name) {
+  return requestJSON("/admin/categories", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function deleteCategoryOption(id) {
+  const res = await fetch(`${API_BASE_URL}/admin/categories/${id}`, { method: "DELETE" })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail.detail || `요청 실패: ${res.status}`)
+  }
+  return res.json()
+}
+
+// 키워드 선택지 (매장 등록 폼 / 뱃지 조건 폼에서 공용으로 사용)
+export function getKeywordOptions() {
+  return requestJSON("/keywords")
+}
+
+export function createKeywordOption(name) {
+  return requestJSON("/admin/keywords", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function deleteKeywordOption(id) {
+  const res = await fetch(`${API_BASE_URL}/admin/keywords/${id}`, { method: "DELETE" })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail.detail || `요청 실패: ${res.status}`)
+  }
+  return res.json()
 }
 
 // 체크인 목록 조회 (사장님 대시보드의 승인 대기 목록 / 마이페이지의 내 방문 기록에서 사용)

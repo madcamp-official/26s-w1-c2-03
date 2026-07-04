@@ -138,7 +138,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
                   onClick={() => onSendPhoto(s)}
                   className="flex w-full items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-left"
                 >
-                  <span className="text-xl">{emojiFor(s.category)}</span>
+                  <span className="text-xl">{emojiFor((s.categories || [])[0])}</span>
                   <div className="flex-1">
                     <p className="font-medium text-slate-800">{s.name}</p>
                     <p className="text-xs text-slate-400">

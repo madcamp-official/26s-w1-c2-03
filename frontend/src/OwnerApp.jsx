@@ -83,7 +83,7 @@ export default function OwnerApp({ user, onExit }) {
                   <div>
                     <p className="font-semibold text-slate-900">{s.name}</p>
                     <p className="text-sm text-slate-500">
-                      {s.category} · {s.address}
+                      {(s.categories || []).join(", ")} · {s.address}
                     </p>
                   </div>
                   <span className="text-slate-300">›</span>

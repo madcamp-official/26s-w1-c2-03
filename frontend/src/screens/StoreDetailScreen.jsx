@@ -19,6 +19,7 @@ export default function StoreDetailScreen({ store, onBack, onCheckin }) {
   if (!store) return null
 
   const keywords = store.keywords || []
+  const storeCategories = store.categories || []
   const topVisitors = store.topVisitors || []
   const rewards = store.rewards || []
 
@@ -33,12 +34,12 @@ export default function StoreDetailScreen({ store, onBack, onCheckin }) {
 
       <div className="px-5">
         <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl">
-          {emojiFor(store.category)}
+          {emojiFor(storeCategories[0])}
         </div>
 
         <h2 className="mt-4 text-2xl font-bold text-slate-900">{store.name}</h2>
         <p className="text-slate-500">
-          {store.category} · {store.address}
+          {storeCategories.join(", ")} · {store.address}
         </p>
         {keywords.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">

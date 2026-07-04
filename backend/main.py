@@ -75,8 +75,10 @@ class StoreCreate(BaseModel):
     owner_id: str
     name: str
     address: str
-    category: Optional[str] = None
+    categories: Optional[list[str]] = None
     keywords: Optional[list[str]] = None
+
+MAX_STORE_KEYWORDS = 3
 
 
 async def geocode_address(address: str) -> dict:
@@ -111,6 +113,9 @@ async def geocode_address(address: str) -> dict:
 
 @app.post("/stores")
 async def create_store(payload: StoreCreate):
+    if payload.keywords and len(payload.keywords) > MAX_STORE_KEYWORDS:
+        raise HTTPException(status_code=422, detail=f"키워드는 최대 {MAX_STORE_KEYWORDS}개까지 선택할 수 있어요.")
+
     db = require_supabase()
     geo = await geocode_address(payload.address)
 
@@ -127,7 +132,7 @@ async def create_store(payload: StoreCreate):
         "owner_id": payload.owner_id,
         "name": payload.name,
         "address": payload.address,
-        "category": payload.category,
+        "categories": payload.categories,
         "keywords": payload.keywords,
         "lat": geo["lat"],
         "lng": geo["lng"],
@@ -137,6 +142,66 @@ async def create_store(payload: StoreCreate):
 
     result = safe_execute(db.table("stores").insert(row), "매장 등록 실패 (owner_id가 owners 테이블에 있는지 확인)")
     return result.data[0]
+
+
+# ---------------------------------------------------------------------
+# 카테고리 / 키워드 선택지 (관리자 페이지에서 추가 — 매장 등록/뱃지 조건 폼에서 선택지로 사용)
+# ---------------------------------------------------------------------
+
+class OptionCreate(BaseModel):
+    name: str
+
+
+@app.get("/categories")
+def get_categories():
+    db = require_supabase()
+    result = safe_execute(db.table("category_options").select("*").order("name"), "카테고리 목록 조회 실패")
+    return result.data
+
+
+@app.post("/admin/categories")
+def create_category(payload: OptionCreate):
+    db = require_supabase()
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="카테고리 이름을 입력해주세요.")
+    result = safe_execute(db.table("category_options").insert({"name": name}), "카테고리 추가 실패 (이미 있는 이름인지 확인)")
+    return result.data[0]
+
+
+@app.delete("/admin/categories/{category_id}")
+def delete_category(category_id: str):
+    db = require_supabase()
+    result = safe_execute(db.table("category_options").delete().eq("id", category_id), "카테고리 삭제 실패")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없습니다.")
+    return {"deleted": True}
+
+
+@app.get("/keywords")
+def get_keywords():
+    db = require_supabase()
+    result = safe_execute(db.table("keyword_options").select("*").order("name"), "키워드 목록 조회 실패")
+    return result.data
+
+
+@app.post("/admin/keywords")
+def create_keyword(payload: OptionCreate):
+    db = require_supabase()
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="키워드 이름을 입력해주세요.")
+    result = safe_execute(db.table("keyword_options").insert({"name": name}), "키워드 추가 실패 (이미 있는 이름인지 확인)")
+    return result.data[0]
+
+
+@app.delete("/admin/keywords/{keyword_id}")
+def delete_keyword(keyword_id: str):
+    db = require_supabase()
+    result = safe_execute(db.table("keyword_options").delete().eq("id", keyword_id), "키워드 삭제 실패")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="키워드를 찾을 수 없습니다.")
+    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------
@@ -253,7 +318,7 @@ def get_checkins(store_id: Optional[str] = None, user_id: Optional[str] = None, 
     db = require_supabase()
     # users(nickname): 사장님 화면에서 "누가 보냈는지" / stores(...): 마이페이지 방문 기록에 매장 정보 같이 보여줄 때 사용
     query = db.table("checkins").select(
-        "*, users(nickname), stores(id, name, category, keywords, address, lat, lng)"
+        "*, users(nickname), stores(id, name, categories, keywords, address, lat, lng)"
     )
     if store_id:
         query = query.eq("store_id", store_id)
@@ -389,6 +454,12 @@ async def create_badge(
             raise HTTPException(
                 status_code=422, detail="조건은 type(keyword|category), value, min_count가 모두 필요해요."
             )
+        option_table = "keyword_options" if c_type == "keyword" else "category_options"
+        existing_option = safe_execute(
+            db.table(option_table).select("id").eq("name", c_value), "선택지 확인 실패"
+        )
+        if not existing_option.data:
+            raise HTTPException(status_code=422, detail=f"등록되지 않은 선택지예요: {c_value}")
         condition_rows.append(
             {"badge_id": badge["id"], "condition_type": c_type, "condition_value": c_value, "min_count": int(c_min)}
         )
@@ -404,7 +475,7 @@ def _compute_earned_badges(db, user_id: str):
     # 각 뱃지가 가진 조건을 전부(AND) 만족하는지 확인한다.
     checkins_result = safe_execute(
         db.table("checkins")
-        .select("*, stores(category, keywords)")
+        .select("*, stores(categories, keywords)")
         .eq("user_id", user_id)
         .eq("status", "approved"),
         "체크인 조회 실패",
@@ -416,8 +487,7 @@ def _compute_earned_badges(db, user_id: str):
         store = c.get("stores") or {}
         for kw in store.get("keywords") or []:
             keyword_counts[kw] = keyword_counts.get(kw, 0) + 1
-        category = store.get("category")
-        if category:
+        for category in store.get("categories") or []:
             category_counts[category] = category_counts.get(category, 0) + 1
 
     badges_result = safe_execute(db.table("badges").select("*, badge_conditions(*)"), "뱃지 목록 조회 실패")

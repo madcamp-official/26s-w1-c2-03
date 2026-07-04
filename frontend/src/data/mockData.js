@@ -7,8 +7,6 @@ export const currentUser = {
   totalStamps: 34,
 }
 
-export const categories = ["전체", "카페", "한식", "일식", "양식", "분식", "디저트", "주점"]
-
 export const purposes = ["외식", "카공", "혼밥", "혼술", "회식", "데이트", "모임"]
 
 // 지역 선택용 (시/도 → 구). 나중에 네이버 지오코딩으로 확장 가능.
@@ -22,7 +20,7 @@ export const stores = [
   {
     id: "store-1",
     name: "성수동 감성카페",
-    category: "카페",
+    categories: ["카페"],
     address: "서울 성동구 성수동 123",
     sido: "서울특별시",
     gu: "성동구",
@@ -42,7 +40,7 @@ export const stores = [
   {
     id: "store-2",
     name: "왕돈까스",
-    category: "일식",
+    categories: ["일식"],
     address: "서울 성동구 왕십리로 45",
     sido: "서울특별시",
     gu: "성동구",
@@ -62,7 +60,7 @@ export const stores = [
   {
     id: "store-3",
     name: "혼밥국밥",
-    category: "한식",
+    categories: ["한식"],
     address: "서울 성동구 성수이로 8",
     sido: "서울특별시",
     gu: "성동구",
@@ -82,7 +80,7 @@ export const stores = [
   {
     id: "store-4",
     name: "성수 수제버거",
-    category: "양식",
+    categories: ["양식"],
     address: "서울 성동구 연무장길 30",
     sido: "서울특별시",
     gu: "성동구",

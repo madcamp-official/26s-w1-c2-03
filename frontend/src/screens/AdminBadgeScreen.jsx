@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react"
-import { categories } from "../data/mockData"
-import { createBadge, getBadges, deleteBadge } from "../lib/api"
+import { createBadge, getBadges, deleteBadge, getCategoryOptions, getKeywordOptions } from "../lib/api"
 import ImageCropper from "../components/ImageCropper"
 
-const STORE_CATEGORIES = categories.filter((c) => c !== "전체")
 const QUICK_EMOJIS = ["🏆", "☕", "🍰", "🍚", "🍻", "🌅", "✍️", "🧭", "💻", "🏙️", "🍜", "🔥"]
 
 function emptyCondition() {
@@ -28,6 +26,8 @@ export default function AdminBadgeScreen() {
   const [success, setSuccess] = useState(null)
 
   const [badgeList, setBadgeList] = useState(null)
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [keywordOptions, setKeywordOptions] = useState([])
 
   const loadBadges = () => {
     getBadges()
@@ -35,6 +35,15 @@ export default function AdminBadgeScreen() {
       .catch(() => setBadgeList([]))
   }
   useEffect(loadBadges, [])
+
+  useEffect(() => {
+    getCategoryOptions()
+      .then((options) => setCategoryOptions(options.map((o) => o.name)))
+      .catch(() => setCategoryOptions([]))
+    getKeywordOptions()
+      .then((options) => setKeywordOptions(options.map((o) => o.name)))
+      .catch(() => setKeywordOptions([]))
+  }, [])
 
   const handleDelete = async (badge) => {
     if (!window.confirm(`"${badge.name}" 뱃지를 삭제할까요?`)) return
@@ -211,27 +220,18 @@ export default function AdminBadgeScreen() {
                   <option value="category">카테고리</option>
                 </select>
 
-                {c.type === "keyword" ? (
-                  <input
-                    value={c.value}
-                    onChange={(e) => updateCondition(i, { value: e.target.value })}
-                    placeholder="예: 조용한"
-                    className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
-                  />
-                ) : (
-                  <select
-                    value={c.value}
-                    onChange={(e) => updateCondition(i, { value: e.target.value })}
-                    className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="">카테고리 선택</option>
-                    {STORE_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  value={c.value}
+                  onChange={(e) => updateCondition(i, { value: e.target.value })}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="">{c.type === "keyword" ? "키워드 선택" : "카테고리 선택"}</option>
+                  {(c.type === "keyword" ? keywordOptions : categoryOptions).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
 
                 <input
                   type="number"
