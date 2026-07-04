@@ -1,5 +1,8 @@
 // FastAPI 백엔드 호출 전용 모듈
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"
+// 접속한 주소를 기준으로 자동 결정: PC에서 localhost로 열면 localhost:8000,
+// 폰에서 네트워크 IP로 열면 같은 IP의 8000번 포트를 자동으로 바라봄
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:8000`
 
 async function requestJSON(path, options = {}) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -74,6 +77,11 @@ export function createStore({ ownerId, name, address, category, keywords }) {
       keywords,
     }),
   })
+}
+
+// 상호명으로 카카오 장소 검색 (사장님이 직접 주소 안 치고 검색해서 고르는 방식)
+export function searchPlace(query) {
+  return requestJSON(`/kakao/search-place?query=${encodeURIComponent(query)}`)
 }
 
 // 체크인 목록 조회 (사장님 대시보드에서 승인 대기 목록 볼 때 사용)

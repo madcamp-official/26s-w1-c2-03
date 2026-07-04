@@ -21,9 +21,7 @@ app = FastAPI(title="맛짱(Matzzang) API")
 
 app.add_middleware(
     CORSMiddleware,
-    # 로컬 개발 중엔 5173번이 이미 사용 중이면 Vite가 5174, 5175...로 자동으로 옮겨감.
-    # 매번 여기 포트를 손대지 않도록 정규식으로 localhost의 모든 포트를 허용.
-    allow_origin_regex=r"http://localhost:\d+",
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}):5173",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -39,17 +37,6 @@ def require_supabase():
     return supabase
 
 
-def safe_execute(query, error_message="요청 처리에 실패했습니다"):
-    # Supabase 쿼리 실행 중 처리 안 된 예외가 나면 CORS 헤더 없는 500이 되어
-    # 브라우저에 "Failed to fetch"로만 보임 → 항상 detail이 담긴 HTTPException으로 변환.
-    try:
-        return query.execute()
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"{error_message}: {e}")
-
-
 @app.get("/health")
 def health():
     return {"status": "ok", "supabase_connected": supabase is not None}
@@ -62,7 +49,7 @@ def health():
 @app.get("/stores")
 def get_stores():
     db = require_supabase()
-    result = safe_execute(db.table("stores").select("*"), "매장 목록 조회 실패")
+    result = db.table("stores").select("*").execute()
     return result.data
 
 
@@ -121,8 +108,43 @@ async def create_store(payload: StoreCreate):
         "gu": geo["gu"],
     }
 
-    result = safe_execute(db.table("stores").insert(row), "매장 등록 실패 (owner_id가 owners 테이블에 있는지 확인)")
+    result = db.table("stores").insert(row).execute()
     return result.data[0]
+
+
+@app.get("/kakao/search-place")
+async def search_place(query: str):
+    """
+    상호명으로 카카오 장소를 검색 (사장님 대시보드에서 매장 자동 등록용).
+    주소 검색(geocode_address)과 달리 이름만 알아도 검색 가능하고,
+    카테고리/전화번호까지 같이 돌려줌.
+    """
+    if not KAKAO_REST_API_KEY:
+        raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    url = "https://dapi.kakao.com/v2/local/search/keyword.json"
+    headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
+    params = {"query": query}
+
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers=headers, params=params)
+
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"카카오 장소 검색 실패 (status {res.status_code})")
+
+    data = res.json()
+    results = []
+    for doc in data.get("documents", []):
+        results.append({
+            "kakao_place_id": doc.get("id"),
+            "name": doc.get("place_name"),
+            "address": doc.get("road_address_name") or doc.get("address_name"),
+            "category_hint": doc.get("category_name"),  # 참고용 — 우리 카테고리 칩과 자동 매칭 안 됨, 사장님이 직접 선택
+            "phone": doc.get("phone") or None,
+            "lat": float(doc["y"]),
+            "lng": float(doc["x"]),
+        })
+    return results
 
 
 # ---------------------------------------------------------------------
@@ -141,24 +163,19 @@ class UserLogin(BaseModel):
 @app.post("/users/signup")
 def signup(payload: UserSignup):
     db = require_supabase()
-    existing = safe_execute(
-        db.table("users").select("id").eq("login_id", payload.login_id), "아이디 중복 확인 실패"
-    )
+    existing = db.table("users").select("id").eq("login_id", payload.login_id).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="이미 사용 중인 아이디예요.")
-    result = safe_execute(
-        db.table("users").insert({"login_id": payload.login_id, "nickname": payload.nickname}),
-        "회원가입 실패",
-    )
+    result = db.table("users").insert(
+        {"login_id": payload.login_id, "nickname": payload.nickname}
+    ).execute()
     return result.data[0]
 
 
 @app.post("/users/login")
 def login(payload: UserLogin):
     db = require_supabase()
-    result = safe_execute(
-        db.table("users").select("*").eq("login_id", payload.login_id), "로그인 조회 실패"
-    )
+    result = db.table("users").select("*").eq("login_id", payload.login_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="등록되지 않은 아이디예요. 회원가입을 먼저 해주세요.")
     return result.data[0]
@@ -220,13 +237,11 @@ async def kakao_login(payload: KakaoLoginRequest):
     )
 
     # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
-    existing = safe_execute(db.table("users").select("*").eq("kakao_id", kakao_id), "카카오 회원 조회 실패")
+    existing = db.table("users").select("*").eq("kakao_id", kakao_id).execute()
     if existing.data:
         return existing.data[0]
 
-    result = safe_execute(
-        db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}), "카카오 회원 생성 실패"
-    )
+    result = db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}).execute()
     return result.data[0]
 
 
@@ -242,7 +257,7 @@ def get_checkins(store_id: Optional[str] = None, status: Optional[str] = None):
         query = query.eq("store_id", store_id)
     if status:
         query = query.eq("status", status)
-    result = safe_execute(query.order("created_at", desc=True), "체크인 목록 조회 실패")
+    result = query.order("created_at", desc=True).execute()
     return result.data
 
 
@@ -282,7 +297,7 @@ async def create_checkin(
         "purpose": purpose,
         "status": "pending",
     }
-    result = safe_execute(db.table("checkins").insert(row), "체크인 등록 실패")
+    result = db.table("checkins").insert(row).execute()
     return result.data[0]
 
 
@@ -296,11 +311,11 @@ def review_checkin(checkin_id: str, payload: CheckinReview):
         raise HTTPException(status_code=422, detail="status는 approved 또는 rejected 여야 합니다.")
 
     db = require_supabase()
-    result = safe_execute(
+    result = (
         db.table("checkins")
         .update({"status": payload.status, "reviewed_at": "now()"})
-        .eq("id", checkin_id),
-        "체크인 처리 실패",
+        .eq("id", checkin_id)
+        .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="체크인을 찾을 수 없습니다.")
