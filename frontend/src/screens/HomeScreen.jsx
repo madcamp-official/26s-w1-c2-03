@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getStores, getCategoryOptions } from "../lib/api"
+import { storeMatchesQuery } from "../lib/fuzzySearch"
 
 // 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
 const CATEGORY_EMOJI = {
@@ -31,6 +32,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
   const [gu, setGu] = useState(null)
   const [cat, setCat] = useState("전체")
   const [nearby, setNearby] = useState(false) // 내 위치 기준 정렬 모드
+  const [query, setQuery] = useState("") // 매장 이름/지역/카테고리/키워드 통합 검색어
 
   useEffect(() => {
     setLoading(true)
@@ -83,14 +85,19 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     if (loc) setNearby(true)
   }
 
-  // 카테고리 필터 — 이제 categories는 배열이라 포함 여부로 판단
-  let list = stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
+  // 검색어가 있으면 지역/카테고리 필터 대신 전체 매장에서 이름·주소·지역·카테고리·키워드를 통합 검색
+  // (이름은 오타/띄어쓰기가 조금 틀려도 비슷하면 걸리도록 fuzzySearch가 처리)
+  const isSearching = query.trim().length > 0
+
+  let list = isSearching
+    ? stores.filter((s) => storeMatchesQuery(s, query))
+    : stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
 
   if (nearby && myLocation) {
     list = list
       .map((s) => ({ ...s, distanceKm: haversineKm(myLocation.lat, myLocation.lng, s.lat, s.lng) }))
       .sort((a, b) => a.distanceKm - b.distanceKm)
-  } else {
+  } else if (!isSearching) {
     list = list.filter((s) => s.sido === sido && s.gu === gu)
   }
 
@@ -101,6 +108,25 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         <h1 className="text-2xl font-bold text-slate-900">맛짱</h1>
       </header>
 
+      <div className="px-5 pb-3">
+        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+          <span className="text-slate-400">🔍</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="매장 이름, 지역, 카테고리, 키워드로 검색"
+            className="w-full text-sm text-slate-700 outline-none"
+          />
+          {isSearching && (
+            <button onClick={() => setQuery("")} className="text-slate-300">
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!isSearching && (
+      <>
       <div className="flex items-center gap-2 px-5">
         <select
           value={sido || ""}
@@ -157,6 +183,8 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
           </button>
         ))}
       </div>
+      </>
+      )}
 
       <div className="space-y-3 px-5">
         {loading && <p className="py-10 text-center text-slate-400">불러오는 중...</p>}
@@ -166,7 +194,13 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         )}
 
         {!loading && !error && list.length === 0 && (
-          <p className="py-10 text-center text-slate-400">이 지역엔 아직 등록된 맛집이 없어요 🥲</p>
+          <p className="py-10 text-center text-slate-400">
+            {isSearching ? "검색 결과가 없어요 🥲" : "이 지역엔 아직 등록된 맛집이 없어요 🥲"}
+          </p>
+        )}
+
+        {!loading && !error && isSearching && list.length > 0 && (
+          <p className="text-xs text-slate-400">검색 결과 {list.length}개</p>
         )}
 
         {!loading &&
