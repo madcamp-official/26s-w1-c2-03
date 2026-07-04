@@ -39,6 +39,17 @@ def require_supabase():
     return supabase
 
 
+def safe_execute(query, error_message="요청 처리에 실패했습니다"):
+    # Supabase 쿼리 실행 중 처리 안 된 예외가 나면 CORS 헤더 없는 500이 되어
+    # 브라우저에 "Failed to fetch"로만 보임 → 항상 detail이 담긴 HTTPException으로 변환.
+    try:
+        return query.execute()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"{error_message}: {e}")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "supabase_connected": supabase is not None}
@@ -51,7 +62,7 @@ def health():
 @app.get("/stores")
 def get_stores():
     db = require_supabase()
-    result = db.table("stores").select("*").execute()
+    result = safe_execute(db.table("stores").select("*"), "매장 목록 조회 실패")
     return result.data
 
 
@@ -110,7 +121,7 @@ async def create_store(payload: StoreCreate):
         "gu": geo["gu"],
     }
 
-    result = db.table("stores").insert(row).execute()
+    result = safe_execute(db.table("stores").insert(row), "매장 등록 실패 (owner_id가 owners 테이블에 있는지 확인)")
     return result.data[0]
 
 
@@ -130,19 +141,24 @@ class UserLogin(BaseModel):
 @app.post("/users/signup")
 def signup(payload: UserSignup):
     db = require_supabase()
-    existing = db.table("users").select("id").eq("login_id", payload.login_id).execute()
+    existing = safe_execute(
+        db.table("users").select("id").eq("login_id", payload.login_id), "아이디 중복 확인 실패"
+    )
     if existing.data:
         raise HTTPException(status_code=400, detail="이미 사용 중인 아이디예요.")
-    result = db.table("users").insert(
-        {"login_id": payload.login_id, "nickname": payload.nickname}
-    ).execute()
+    result = safe_execute(
+        db.table("users").insert({"login_id": payload.login_id, "nickname": payload.nickname}),
+        "회원가입 실패",
+    )
     return result.data[0]
 
 
 @app.post("/users/login")
 def login(payload: UserLogin):
     db = require_supabase()
-    result = db.table("users").select("*").eq("login_id", payload.login_id).execute()
+    result = safe_execute(
+        db.table("users").select("*").eq("login_id", payload.login_id), "로그인 조회 실패"
+    )
     if not result.data:
         raise HTTPException(status_code=404, detail="등록되지 않은 아이디예요. 회원가입을 먼저 해주세요.")
     return result.data[0]
@@ -204,11 +220,13 @@ async def kakao_login(payload: KakaoLoginRequest):
     )
 
     # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
-    existing = db.table("users").select("*").eq("kakao_id", kakao_id).execute()
+    existing = safe_execute(db.table("users").select("*").eq("kakao_id", kakao_id), "카카오 회원 조회 실패")
     if existing.data:
         return existing.data[0]
 
-    result = db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}).execute()
+    result = safe_execute(
+        db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}), "카카오 회원 생성 실패"
+    )
     return result.data[0]
 
 
@@ -224,7 +242,7 @@ def get_checkins(store_id: Optional[str] = None, status: Optional[str] = None):
         query = query.eq("store_id", store_id)
     if status:
         query = query.eq("status", status)
-    result = query.order("created_at", desc=True).execute()
+    result = safe_execute(query.order("created_at", desc=True), "체크인 목록 조회 실패")
     return result.data
 
 
@@ -264,7 +282,7 @@ async def create_checkin(
         "purpose": purpose,
         "status": "pending",
     }
-    result = db.table("checkins").insert(row).execute()
+    result = safe_execute(db.table("checkins").insert(row), "체크인 등록 실패")
     return result.data[0]
 
 
@@ -278,11 +296,11 @@ def review_checkin(checkin_id: str, payload: CheckinReview):
         raise HTTPException(status_code=422, detail="status는 approved 또는 rejected 여야 합니다.")
 
     db = require_supabase()
-    result = (
+    result = safe_execute(
         db.table("checkins")
         .update({"status": payload.status, "reviewed_at": "now()"})
-        .eq("id", checkin_id)
-        .execute()
+        .eq("id", checkin_id),
+        "체크인 처리 실패",
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="체크인을 찾을 수 없습니다.")
