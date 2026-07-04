@@ -1,7 +1,6 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import LoginScreen from "./screens/LoginScreen"
 import SignupScreen from "./screens/SignupScreen"
-import OwnerDashboardScreen from "./screens/OwnerDashboardScreen"
 import HomeScreen from "./screens/HomeScreen"
 import MapScreen from "./screens/MapScreen"
 import StoreDetailScreen from "./screens/StoreDetailScreen"
@@ -9,37 +8,94 @@ import CheckinScreen from "./screens/CheckinScreen"
 import MyPageScreen from "./screens/MyPageScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
+import { loginUser, signupUser, loginWithKakao } from "./lib/api"
 
-// 새로고침해도 로그인 유지되게 localStorage에서 불러옴 (비밀번호는 저장 안 함)
 function loadUser() {
   const s = localStorage.getItem("user")
   return s ? JSON.parse(s) : null
 }
 
 export default function App() {
-  const [user, setUser] = useState(loadUser) // null이면 로그인 안 된 상태
+  const [user, setUser] = useState(loadUser)
   const [authScreen, setAuthScreen] = useState("login") // login | signup
-  const [ownerMode, setOwnerMode] = useState(false) // 사장님 대시보드 진입 여부
+  const [authError, setAuthError] = useState(null)
+  const [kakaoLoading, setKakaoLoading] = useState(false)
+  const handledKakaoCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
 
-  const [screen, setScreen] = useState("home") // home | map | detail | checkin | my
+  const [screen, setScreen] = useState("home")
   const [selectedStore, setSelectedStore] = useState(null)
   const [prevScreen, setPrevScreen] = useState("home")
 
-  // 내 위치는 홈·지도가 함께 사용
   const [myLocation, setMyLocation] = useState(null)
   const [locating, setLocating] = useState(false)
 
-  // --- 인증 ---
-  const login = (id) => {
-    const u = { id, nickname: id }
-    setUser(u)
-    localStorage.setItem("user", JSON.stringify(u))
+  // 카카오 JS SDK 초기화 (스크립트는 index.html 에서 로드됨)
+  useEffect(() => {
+    if (window.Kakao && !window.Kakao.isInitialized()) {
+      window.Kakao.init(import.meta.env.VITE_KAKAO_JS_KEY)
+    }
+  }, [])
+
+  // 카카오 로그인 후 리다이렉트되어 돌아왔을 때 (?code=... 처리)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get("code")
+    const kakaoAuthError = params.get("error")
+
+    if (kakaoAuthError) {
+      setAuthError("카카오 로그인이 취소되었어요.")
+      window.history.replaceState({}, "", window.location.pathname)
+      return
+    }
+
+    if (code && !handledKakaoCode.current) {
+      handledKakaoCode.current = true
+      setKakaoLoading(true)
+      loginWithKakao({ code, redirectUri: window.location.origin })
+        .then((u) => {
+          setUser(u)
+          localStorage.setItem("user", JSON.stringify(u))
+        })
+        .catch((err) => setAuthError(err.message))
+        .finally(() => {
+          setKakaoLoading(false)
+          window.history.replaceState({}, "", window.location.pathname)
+        })
+    }
+  }, [])
+
+  const startKakaoLogin = () => {
+    setAuthError(null)
+    if (!window.Kakao) {
+      setAuthError("카카오 SDK를 불러오지 못했어요. index.html을 확인해주세요.")
+      return
+    }
+    window.Kakao.Auth.authorize({ redirectUri: window.location.origin })
   }
-  const signup = (id, nickname) => {
-    const u = { id, nickname }
-    setUser(u)
-    localStorage.setItem("user", JSON.stringify(u))
+
+  // --- 기존 간단 로그인 (백업용으로 유지) ---
+  const login = async (id) => {
+    setAuthError(null)
+    try {
+      const u = await loginUser({ loginId: id })
+      setUser(u)
+      localStorage.setItem("user", JSON.stringify(u))
+    } catch (err) {
+      setAuthError(err.message)
+    }
   }
+
+  const signup = async (id, nickname) => {
+    setAuthError(null)
+    try {
+      const u = await signupUser({ loginId: id, nickname })
+      setUser(u)
+      localStorage.setItem("user", JSON.stringify(u))
+    } catch (err) {
+      setAuthError(err.message)
+    }
+  }
+
   const logout = () => {
     setUser(null)
     localStorage.removeItem("user")
@@ -60,31 +116,38 @@ export default function App() {
     return loc
   }
 
-  // 사장님 대시보드는 손님 로그인과 별개 흐름 (사장님 로그인은 아직 백엔드에 없음 — MVP 임시)
-  if (ownerMode) {
-    return <OwnerDashboardScreen onBack={() => setOwnerMode(false)} />
-  }
-
-  // 로그인 안 됐으면 로그인/회원가입만 보여줌
   if (!user) {
     return (
       <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
+        {authError && (
+          <p className="bg-red-50 px-5 py-2 text-center text-sm text-red-500">{authError}</p>
+        )}
+
+        <div className="px-5 pt-8">
+          <button
+            onClick={startKakaoLogin}
+            disabled={kakaoLoading}
+            className="w-full rounded-xl bg-[#FEE500] py-3 text-sm font-semibold text-[#191919] shadow-sm"
+          >
+            {kakaoLoading ? "로그인 처리 중..." : "💬 카카오로 시작하기"}
+          </button>
+
+          <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
+            <div className="h-px flex-1 bg-slate-200" />
+            또는
+            <div className="h-px flex-1 bg-slate-200" />
+          </div>
+        </div>
+
         {authScreen === "login" ? (
           <LoginScreen onLogin={login} goSignup={() => setAuthScreen("signup")} />
         ) : (
           <SignupScreen onSignup={signup} goLogin={() => setAuthScreen("login")} />
         )}
-        <button
-          onClick={() => setOwnerMode(true)}
-          className="pb-6 text-center text-xs text-slate-400 underline"
-        >
-          사장님이신가요? 매장 등록하기
-        </button>
       </div>
     )
   }
 
-  // 로그인 됐으면 앱 본체
   return (
     <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
       <main className="min-h-0 flex-1 overflow-y-auto">
@@ -104,6 +167,7 @@ export default function App() {
         {screen === "checkin" && (
           <CheckinScreen
             store={selectedStore}
+            user={user}
             onBack={() => setScreen("detail")}
             onDone={() => setScreen("home")}
           />
