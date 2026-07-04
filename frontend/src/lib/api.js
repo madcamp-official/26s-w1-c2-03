@@ -61,3 +61,34 @@ export function createCheckin({ userId, storeId, purpose, photoFile }) {
   formData.append("file", photoFile)
   return requestForm("/checkins", formData)
 }
+
+// 매장 등록 (사장님 대시보드용) — 주소는 백엔드에서 카카오 API로 좌표/시도/구군 자동 변환됨
+export function createStore({ ownerId, name, address, category, keywords }) {
+  return requestJSON("/stores", {
+    method: "POST",
+    body: JSON.stringify({
+      owner_id: ownerId,
+      name,
+      address,
+      category,
+      keywords,
+    }),
+  })
+}
+
+// 체크인 목록 조회 (사장님 대시보드에서 승인 대기 목록 볼 때 사용)
+export function getCheckins({ storeId, status } = {}) {
+  const params = new URLSearchParams()
+  if (storeId) params.set("store_id", storeId)
+  if (status) params.set("status", status)
+  const query = params.toString() ? `?${params.toString()}` : ""
+  return requestJSON(`/checkins${query}`)
+}
+
+// 체크인 승인/거절
+export function reviewCheckin({ checkinId, status }) {
+  return requestJSON(`/checkins/${checkinId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  })
+}
