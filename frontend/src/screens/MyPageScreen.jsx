@@ -1,7 +1,7 @@
 import { currentUser, badges, stores } from "../data/mockData"
 
 // 마이 — 프로필 + 뱃지 + 방문 기록 (정복 지도)
-export default function MyPageScreen({ user, onLogout }) {
+export default function MyPageScreen({ user, onLogout, onEnterOwnerMode }) {
   const visited = stores
     .filter((s) => s.myStamps > 0)
     .sort((a, b) => b.myStamps - a.myStamps)
@@ -58,10 +58,20 @@ export default function MyPageScreen({ user, onLogout }) {
           </div>
         </section>
 
+        {/* 사장님 모드 — 등록된 사장님 아이디만 보임 */}
+        {onEnterOwnerMode && (
+          <button
+            onClick={onEnterOwnerMode}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3.5 font-semibold text-white"
+          >
+            🏪 사장님 모드로 전환
+          </button>
+        )}
+
         {/* 로그아웃 */}
         <button
           onClick={onLogout}
-          className="mt-6 w-full rounded-xl border border-slate-200 py-3 text-sm font-medium text-slate-500"
+          className="mt-3 w-full rounded-xl border border-slate-200 py-3 text-sm font-medium text-slate-500"
         >
           로그아웃
         </button>

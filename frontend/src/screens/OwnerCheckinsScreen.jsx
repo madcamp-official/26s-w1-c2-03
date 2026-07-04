@@ -1,12 +1,14 @@
 import { useState } from "react"
 import { pendingCheckins as initialCheckins } from "../data/mockData"
 
-// 사장님 — 손님이 올린 방문 인증 요청을 수락/거절
+// 사장님 — 손님이 올린 방문 인증 요청을 수락/거절 (본인 가게 요청만)
 // ⚠️ 지금은 목데이터 + 화면 안에서만 상태 변경. 백엔드에 아래 엔드포인트가 생기면 연결:
-//    - 목록 조회: GET /stores/{store_id}/checkins?status=pending
+//    - 목록 조회: GET /stores/{store_id}/checkins?status=pending  (내 store_id로 이미 필터됨)
 //    - 수락/거절: PATCH /checkins/{checkin_id}  body: { status: "approved" | "rejected" }
-export default function OwnerCheckinsScreen() {
-  const [checkins, setCheckins] = useState(initialCheckins)
+export default function OwnerCheckinsScreen({ storeName }) {
+  // 로그인한 사장님의 가게에 온 요청만 남김
+  const myCheckins = initialCheckins.filter((c) => c.storeName === storeName)
+  const [checkins, setCheckins] = useState(myCheckins)
 
   const pending = checkins.filter((c) => c.status === "pending")
   const done = checkins.filter((c) => c.status !== "pending")
