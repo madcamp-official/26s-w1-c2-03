@@ -1,9 +1,8 @@
 // 카카오맵 버전 MapScreen — 실제 백엔드 API에서 매장 데이터를 가져오고,
 // 지도 중심/줌은 등록된 매장들 범위에 맞춰 자동으로 조정됨 (전국 대응)
 import { useEffect, useRef, useState } from "react"
-import { categories } from "../data/mockData"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getStores } from "../lib/api"
+import { getStores, getCategoryOptions } from "../lib/api"
 
 // 매장 데이터가 아직 없을 때만 쓰는 기본 중심 (성수동)
 const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
@@ -56,7 +55,7 @@ function makePinHtml(store) {
       background:${bg};border:${border};
       box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:${opacity};
       cursor:pointer;">
-      <span style="transform:rotate(45deg);font-size:20px;">${emojiFor(store.category)}</span>
+      <span style="transform:rotate(45deg);font-size:20px;">${emojiFor((store.categories || [])[0])}</span>
     </div>`
 }
 
@@ -79,6 +78,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
 
   const [stores, setStores] = useState([])
   const [loadError, setLoadError] = useState(null)
+  const [categoryOptions, setCategoryOptions] = useState([])
 
   // 매장 목록은 화면 진입 시 한 번 백엔드에서 가져옴
   useEffect(() => {
@@ -87,7 +87,13 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       .catch((err) => setLoadError(err.message))
   }, [])
 
-  const visibleStores = stores.filter((s) => cat === "전체" || s.category === cat)
+  useEffect(() => {
+    getCategoryOptions()
+      .then((options) => setCategoryOptions(options.map((o) => o.name)))
+      .catch(() => setCategoryOptions([]))
+  }, [])
+
+  const visibleStores = stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
 
   // 지도 최초 1회 생성 (일단 기본 위치로 띄우고, 매장 데이터 도착하면 자동으로 범위 맞춤)
   useEffect(() => {
@@ -116,9 +122,9 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     const el = document.createElement("div")
     el.innerHTML = `
       <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
-        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.category)} ${store.name}</p>
+        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor((store.categories || [])[0])} ${store.name}</p>
         <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
-          ${store.category}${(store.myStamps ?? 0) > 0 ? ` · 방문 ${store.myStamps}회 ✅` : " · 아직 안 감"}
+          ${(store.categories || []).join(", ")}${(store.myStamps ?? 0) > 0 ? ` · 방문 ${store.myStamps}회 ✅` : " · 아직 안 감"}
         </p>
         ${
           myLocation
@@ -221,7 +227,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
 
       {/* 상단 카테고리 필터 */}
       <div className="absolute inset-x-0 top-0 z-[1000] flex gap-2 overflow-x-auto bg-gradient-to-b from-white/95 to-transparent px-3 py-3">
-        {categories.map((c) => (
+        {["전체", ...categoryOptions].map((c) => (
           <button
             key={c}
             onClick={() => setCat(c)}

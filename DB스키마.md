@@ -40,11 +40,22 @@ users ──< reviews >── stores
 | owner_id | uuid | 등록한 사장님 (→ owners) |
 | name | text | 매장 이름 *(사장님 입력)* |
 | address | text | 주소 *(사장님 입력)* |
-| category | text | 카페 / 한식 / 일식 / 디저트 … *(사장님 선택)* |
-| keywords | text[] | 키워드 배열 (예: {분위기좋은, 조용한, 디저트맛집}) *(사장님 입력)* |
+| categories | text[] | 카페 / 한식 / 일식 / 디저트 … 중복 선택 (예: {카페, 디저트}) *(사장님이 category_options 중에서 선택)* |
+| keywords | text[] | 키워드 배열, 최대 3개 (예: {분위기좋은, 조용한, 디저트맛집}) *(사장님이 keyword_options 중에서 선택)* |
 | lat | double | 위도 — 주소를 좌표로 자동 변환(카카오 API), 폼 입력 아님 |
 | lng | double | 경도 — 위와 동일 |
+| sido | text | 시/도 — 주소에서 자동 추출 |
+| gu | text | 구/군 — 주소에서 자동 추출 |
 | created_at | timestamptz | 등록 시각 |
+
+### category_options / keyword_options (관리자가 추가하는 선택지 목록)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| name | text | 선택지 이름 (예: "카페", "조용한"), 중복 불가 |
+| created_at | timestamptz | 추가 시각 |
+
+> 매장 등록 폼과 뱃지 조건 폼 모두 여기서 목록을 받아와 선택지로 보여줌. 관리자 페이지에서 추가만 가능(자유 텍스트 입력 폐지).
 
 ### users (손님)
 > 카카오 로그인이 기본, 아이디/비번 로그인은 백업 수단 — 그래서 아래 인증 관련 컬럼은 전부 선택값(nullable)
@@ -82,10 +93,17 @@ users ──< reviews >── stores
 | id | uuid | 고유 번호 |
 | name | text | 뱃지 이름 (예: 카페 마스터) |
 | description | text | 설명 |
-| type | text | store / category / region / activity |
-| icon | text | 이모지 또는 이미지 주소 |
-| condition_count | int | 달성 횟수 (예: 20) |
-| condition_target | text | 대상 (특정 store_id 또는 category 값) |
+| emoji | text | 이모지 아이콘 (image_url과 둘 중 하나만 사용) |
+| image_url | text | 업로드한 이미지 주소 (Supabase Storage) |
+
+### badge_conditions (뱃지 획득 조건 — 뱃지 하나에 여러 개, 전부 AND로 만족해야 함)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid | 고유 번호 |
+| badge_id | uuid | 어떤 뱃지 (→ badges, on delete cascade) |
+| condition_type | text | keyword / category |
+| condition_value | text | category_options 또는 keyword_options 중에서 선택한 값 |
+| min_count | int | 이 조건을 만족하는 방문(체크인)이 몇 회 이상이어야 하는지 |
 
 ### user_badges (획득 기록)
 | 컬럼 | 타입 | 설명 |
@@ -154,12 +172,40 @@ create table stores (
   owner_id uuid references owners(id),
   name text not null,
   address text,
-  category text,
-  keywords text[],                  -- 예: '{분위기좋은, 조용한, 디저트맛집}'
-  lat double precision,             -- 주소 → 좌표 자동 변환(카카오 API)
+  categories text[],                 -- 예: '{카페, 디저트}' (category_options 선택지 중 중복 선택)
+  keywords text[],                   -- 예: '{분위기좋은, 조용한, 디저트맛집}' (keyword_options 선택지 중 최대 3개)
+  lat double precision,              -- 주소 → 좌표 자동 변환(카카오 API)
   lng double precision,
+  sido text,                        -- 주소에서 자동 추출한 시/도
+  gu text,                          -- 주소에서 자동 추출한 구/군
   created_at timestamptz default now()
 );
+
+-- 2-1. 카테고리/키워드 선택지 (관리자 페이지에서 추가)
+create table category_options (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz default now()
+);
+
+create table keyword_options (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz default now()
+);
+
+insert into category_options (name) values
+  ('카페'), ('한식'), ('일식'), ('양식'), ('분식'), ('디저트'), ('주점')
+  on conflict (name) do nothing;
+
+insert into keyword_options (name) values
+  ('조용한'), ('가성비'), ('든든한'), ('혼밥환영'), ('국물맛집'), ('데이트'), ('디저트맛집'), ('수제패티')
+  on conflict (name) do nothing;
+
+-- ※ 기존에 이미 stores.category(text) 컬럼으로 운영 중이었다면 마이그레이션:
+-- alter table stores rename column category to categories;
+-- alter table stores alter column categories type text[] using
+--   case when categories is null then null else array[categories] end;
 
 -- 3. 손님
 -- 카카오 로그인이 기본 수단이 되면서 아이디/비번 로그인은 백업 수단으로 남음.
@@ -190,10 +236,17 @@ create table badges (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   description text,
-  type text,                        -- store / category / region / activity
-  icon text,
-  condition_count int,
-  condition_target text
+  emoji text,                       -- emoji, image_url 둘 중 하나만 사용
+  image_url text
+);
+
+-- 5-1. 뱃지 획득 조건 (뱃지 하나에 여러 개, 전부 AND)
+create table badge_conditions (
+  id uuid primary key default gen_random_uuid(),
+  badge_id uuid references badges(id) on delete cascade,
+  condition_type text,               -- keyword / category
+  condition_value text,              -- category_options / keyword_options 중에서 선택한 값
+  min_count int
 );
 
 -- 6. 뱃지 획득 기록

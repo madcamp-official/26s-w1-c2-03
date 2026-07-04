@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { categories } from "../data/mockData"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getStores } from "../lib/api"
+import { getStores, getCategoryOptions } from "../lib/api"
 
 // 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
 const CATEGORY_EMOJI = {
@@ -24,6 +23,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [categoryOptions, setCategoryOptions] = useState([])
 
   const [sido, setSido] = useState(null)
   const [gu, setGu] = useState(null)
@@ -40,6 +40,12 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    getCategoryOptions()
+      .then((options) => setCategoryOptions(options.map((o) => o.name)))
+      .catch(() => setCategoryOptions([]))
   }, [])
 
   // 실제 데이터에 존재하는 시/도 목록 (있는 지역만 노출됨)
@@ -77,7 +83,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
   }
 
   // 카테고리 필터
-  let list = stores.filter((s) => cat === "전체" || s.category === cat)
+  let list = stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
 
   if (nearby && myLocation) {
     // 내 위치 기준: 거리 계산 후 가까운 순
@@ -144,7 +150,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
       {/* 카테고리 칩 */}
       <div className="mt-3 flex gap-2 overflow-x-auto px-5 pb-4">
-        {categories.map((c) => (
+        {["전체", ...categoryOptions].map((c) => (
           <button
             key={c}
             onClick={() => setCat(c)}
@@ -176,7 +182,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
               className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-50 text-2xl">
-                {emojiFor(s.category)}
+                {emojiFor((s.categories || [])[0])}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
@@ -188,7 +194,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                   )}
                 </div>
                 <p className="text-sm text-slate-500">
-                  {s.category} · 방문 {s.myStamps ?? 0}회
+                  {(s.categories || []).join(", ")} · 방문 {s.myStamps ?? 0}회
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {(s.keywords || []).map((k) => (

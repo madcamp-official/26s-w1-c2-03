@@ -1,7 +1,4 @@
 import { useEffect, useRef, useState } from "react"
-import LoginScreen from "./screens/LoginScreen"
-import SignupScreen from "./screens/SignupScreen"
-import OwnerSignupScreen from "./screens/OwnerSignupScreen"
 import HomeScreen from "./screens/HomeScreen"
 import MapScreen from "./screens/MapScreen"
 import StoreDetailScreen from "./screens/StoreDetailScreen"
@@ -9,38 +6,30 @@ import CheckinScreen from "./screens/CheckinScreen"
 import MyPageScreen from "./screens/MyPageScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
-import { loginUser, signupUser, loginWithKakao } from "./lib/api"
-import { registerOwner, getOwnerInfo } from "./lib/ownerStore"
+import { loginWithKakao } from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
   return s ? JSON.parse(s) : null
 }
 
-// 실제 백엔드 user에 "이 계정이 사장님인지"를 덧붙임 (로그인 방식과 무관하게 user.id로 확인)
-function attachOwnerInfo(user) {
-  const owner = getOwnerInfo(user.id)
-  return { ...user, isOwner: !!owner, storeName: owner?.storeName || null }
-}
-
 export default function CustomerApp({ onGoOwner }) {
   const [user, setUser] = useState(loadUser)
-  const [authScreen, setAuthScreen] = useState("login") // login | signup | ownerSignup
   const [authError, setAuthError] = useState(null)
   const [kakaoLoading, setKakaoLoading] = useState(false)
   const handledKakaoCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
 
   const [screen, setScreen] = useState("home")
   const [selectedStore, setSelectedStore] = useState(null)
-  const [prevScreen, setPrevScreen] = useState("home")
+  const [prevScreen, setPrevScreen] = useState("home") // 매장 상세에서 뒤로가기 시 돌아갈 곳(홈/지도)
+  const [checkinReturnTo, setCheckinReturnTo] = useState("detail") // 인증 화면에서 뒤로가기 시 돌아갈 곳
 
   const [myLocation, setMyLocation] = useState(null)
   const [locating, setLocating] = useState(false)
 
   const saveUser = (u) => {
-    const withOwner = attachOwnerInfo(u)
-    setUser(withOwner)
-    localStorage.setItem("user", JSON.stringify(withOwner))
+    setUser(u)
+    localStorage.setItem("user", JSON.stringify(u))
   }
 
   // 카카오 JS SDK 초기화 (스크립트는 index.html 에서 로드됨)
@@ -92,33 +81,6 @@ export default function CustomerApp({ onGoOwner }) {
     window.Kakao.Auth.authorize({ redirectUri: window.location.origin })
   }
 
-  // --- 기존 간단 로그인 (백업용으로 유지) ---
-  const login = async (id) => {
-    setAuthError(null)
-    try {
-      const u = await loginUser({ loginId: id })
-      saveUser(u)
-    } catch (err) {
-      setAuthError(err.message)
-    }
-  }
-
-  const signup = async (id, nickname) => {
-    setAuthError(null)
-    try {
-      const u = await signupUser({ loginId: id, nickname })
-      saveUser(u)
-    } catch (err) {
-      setAuthError(err.message)
-    }
-  }
-
-  // 사장님 회원가입: 실제 계정 생성 + 이 계정을 사장님으로 등록 → 바로 로그인
-  const ownerSignup = (newUser, storeName) => {
-    registerOwner(newUser.id, storeName)
-    saveUser(newUser)
-  }
-
   const logout = () => {
     setUser(null)
     localStorage.removeItem("user")
@@ -131,6 +93,19 @@ export default function CustomerApp({ onGoOwner }) {
     setScreen("detail")
   }
 
+  // 매장 상세를 거쳐서 인증하러 갈 때
+  const openCheckinFromDetail = () => {
+    setCheckinReturnTo("detail")
+    setScreen("checkin")
+  }
+
+  // 마이페이지의 "내가 방문한 곳"에서 바로 인증하러 갈 때 (상세 화면 건너뜀)
+  const openCheckinDirect = (store) => {
+    setSelectedStore(store)
+    setCheckinReturnTo("my")
+    setScreen("checkin")
+  }
+
   const locateMe = async () => {
     setLocating(true)
     const loc = await getMyLocation()
@@ -139,44 +114,27 @@ export default function CustomerApp({ onGoOwner }) {
     return loc
   }
 
+  // 로그인은 카카오 하나로만 (아이디/비번 로그인은 더 이상 노출 안 함)
   if (!user) {
     return (
-      <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
+      <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col items-center justify-center bg-white px-8">
+        <img src="/app-icon.svg" alt="맛짱" className="mb-4 h-24 w-24" />
+        <h1 className="text-3xl font-bold text-slate-900">맛짱</h1>
+        <p className="mb-10 text-sm font-medium tracking-widest text-amber-500">MATZZANG</p>
+
         {authError && (
-          <p className="bg-red-50 px-5 py-2 text-center text-sm text-red-500">{authError}</p>
+          <p className="mb-4 w-full rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-500">
+            {authError}
+          </p>
         )}
 
-        {authScreen !== "ownerSignup" && (
-          <div className="px-5 pt-8">
-            <button
-              onClick={startKakaoLogin}
-              disabled={kakaoLoading}
-              className="w-full rounded-xl bg-[#FEE500] py-3 text-sm font-semibold text-[#191919] shadow-sm"
-            >
-              {kakaoLoading ? "로그인 처리 중..." : "💬 카카오로 시작하기"}
-            </button>
-
-            <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
-              <div className="h-px flex-1 bg-slate-200" />
-              또는
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
-          </div>
-        )}
-
-        {authScreen === "login" && (
-          <LoginScreen
-            onLogin={login}
-            goSignup={() => setAuthScreen("signup")}
-            goOwner={() => setAuthScreen("ownerSignup")}
-          />
-        )}
-        {authScreen === "signup" && (
-          <SignupScreen onSignup={signup} goLogin={() => setAuthScreen("login")} />
-        )}
-        {authScreen === "ownerSignup" && (
-          <OwnerSignupScreen onOwnerSignup={ownerSignup} goLogin={() => setAuthScreen("login")} />
-        )}
+        <button
+          onClick={startKakaoLogin}
+          disabled={kakaoLoading}
+          className="w-full rounded-xl bg-[#FEE500] py-3.5 text-sm font-semibold text-[#191919] shadow-sm"
+        >
+          {kakaoLoading ? "로그인 처리 중..." : "💬 카카오로 시작하기"}
+        </button>
       </div>
     )
   }
@@ -194,22 +152,23 @@ export default function CustomerApp({ onGoOwner }) {
           <StoreDetailScreen
             store={selectedStore}
             onBack={() => setScreen(prevScreen)}
-            onCheckin={() => setScreen("checkin")}
+            onCheckin={openCheckinFromDetail}
           />
         )}
         {screen === "checkin" && (
           <CheckinScreen
             store={selectedStore}
             user={user}
-            onBack={() => setScreen("detail")}
-            onDone={() => setScreen("home")}
+            onBack={() => setScreen(checkinReturnTo)}
+            onDone={() => setScreen(checkinReturnTo === "my" ? "my" : "home")}
           />
         )}
         {screen === "my" && (
           <MyPageScreen
             user={user}
             onLogout={logout}
-            onEnterOwnerMode={user.isOwner ? () => onGoOwner(user.storeName) : null}
+            onEnterOwnerMode={() => onGoOwner(user)}
+            onSendPhoto={openCheckinDirect}
           />
         )}
       </main>
