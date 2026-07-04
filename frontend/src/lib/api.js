@@ -22,6 +22,20 @@ export function getStores() {
   return request("/stores")
 }
 
+// 매장 등록 (사장님) — 주소는 백엔드가 카카오 API로 좌표 자동 변환
+export function createStore({ ownerId, name, address, category, keywords }) {
+  return request("/stores", {
+    method: "POST",
+    body: JSON.stringify({
+      owner_id: ownerId,
+      name,
+      address,
+      category,
+      keywords,
+    }),
+  })
+}
+
 // 서버 상태 확인 (헬스체크)
 export function checkHealth() {
   return request("/health")

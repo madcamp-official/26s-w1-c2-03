@@ -1,6 +1,7 @@
 import { useState } from "react"
 import LoginScreen from "./screens/LoginScreen"
 import SignupScreen from "./screens/SignupScreen"
+import OwnerDashboardScreen from "./screens/OwnerDashboardScreen"
 import HomeScreen from "./screens/HomeScreen"
 import MapScreen from "./screens/MapScreen"
 import StoreDetailScreen from "./screens/StoreDetailScreen"
@@ -18,6 +19,7 @@ function loadUser() {
 export default function App() {
   const [user, setUser] = useState(loadUser) // null이면 로그인 안 된 상태
   const [authScreen, setAuthScreen] = useState("login") // login | signup
+  const [ownerMode, setOwnerMode] = useState(false) // 사장님 대시보드 진입 여부
 
   const [screen, setScreen] = useState("home") // home | map | detail | checkin | my
   const [selectedStore, setSelectedStore] = useState(null)
@@ -58,6 +60,11 @@ export default function App() {
     return loc
   }
 
+  // 사장님 대시보드는 손님 로그인과 별개 흐름 (사장님 로그인은 아직 백엔드에 없음 — MVP 임시)
+  if (ownerMode) {
+    return <OwnerDashboardScreen onBack={() => setOwnerMode(false)} />
+  }
+
   // 로그인 안 됐으면 로그인/회원가입만 보여줌
   if (!user) {
     return (
@@ -67,6 +74,12 @@ export default function App() {
         ) : (
           <SignupScreen onSignup={signup} goLogin={() => setAuthScreen("login")} />
         )}
+        <button
+          onClick={() => setOwnerMode(true)}
+          className="pb-6 text-center text-xs text-slate-400 underline"
+        >
+          사장님이신가요? 매장 등록하기
+        </button>
       </div>
     )
   }

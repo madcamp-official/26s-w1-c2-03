@@ -96,5 +96,17 @@ async def create_store(payload: StoreCreate):
         "lng": lng,
     }
 
-    result = supabase.table("stores").insert(row).execute()
+    try:
+        result = supabase.table("stores").insert(row).execute()
+    except Exception as e:
+        # 처리 안 된 예외를 그대로 두면 500 응답에 CORS 헤더가 안 붙어
+        # 브라우저에서 진짜 에러 메시지 대신 "Failed to fetch"만 보이게 됨.
+        # DB 에러 메시지를 그대로 노출하지 않고, 흔한 경우만 안내 메시지로 변환.
+        message = str(e)
+        if "owner_id" in message and "not present" in message:
+            detail = "존재하지 않는 사장님 ID입니다. owners 테이블에 등록된 id를 사용하세요."
+        else:
+            detail = "매장 등록에 실패했습니다."
+        raise HTTPException(status_code=400, detail=detail)
+
     return result.data[0]
