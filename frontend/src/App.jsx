@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import LoginScreen from "./screens/LoginScreen"
 import SignupScreen from "./screens/SignupScreen"
-<<<<<<< HEAD
-=======
 import OwnerDashboardScreen from "./screens/OwnerDashboardScreen"
 import OwnerCheckinsScreen from "./screens/OwnerCheckinsScreen"
 import OwnerBottomNav from "./components/OwnerBottomNav"
->>>>>>> 0c3666b174eb6af14a19ac23e575ef57a7ca029c
 import HomeScreen from "./screens/HomeScreen"
 import MapScreen from "./screens/MapScreen"
 import StoreDetailScreen from "./screens/StoreDetailScreen"
@@ -24,14 +21,12 @@ function loadUser() {
 export default function App() {
   const [user, setUser] = useState(loadUser)
   const [authScreen, setAuthScreen] = useState("login") // login | signup
-<<<<<<< HEAD
   const [authError, setAuthError] = useState(null)
   const [kakaoLoading, setKakaoLoading] = useState(false)
   const handledKakaoCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
-=======
+
   const [ownerMode, setOwnerMode] = useState(false) // 사장님 대시보드 진입 여부
   const [ownerScreen, setOwnerScreen] = useState("register") // register | checkins
->>>>>>> 0c3666b174eb6af14a19ac23e575ef57a7ca029c
 
   const [screen, setScreen] = useState("home")
   const [selectedStore, setSelectedStore] = useState(null)
@@ -127,8 +122,6 @@ export default function App() {
     return loc
   }
 
-<<<<<<< HEAD
-=======
   // 사장님 대시보드는 손님 로그인과 별개 흐름 (사장님 로그인은 아직 백엔드에 없음 — MVP 임시)
   if (ownerMode) {
     return (
@@ -151,7 +144,6 @@ export default function App() {
   }
 
   // 로그인 안 됐으면 로그인/회원가입만 보여줌
->>>>>>> 0c3666b174eb6af14a19ac23e575ef57a7ca029c
   if (!user) {
     return (
       <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
@@ -176,7 +168,11 @@ export default function App() {
         </div>
 
         {authScreen === "login" ? (
-          <LoginScreen onLogin={login} goSignup={() => setAuthScreen("signup")} />
+          <LoginScreen
+            onLogin={login}
+            goSignup={() => setAuthScreen("signup")}
+            goOwner={() => setOwnerMode(true)}
+          />
         ) : (
           <SignupScreen onSignup={signup} goLogin={() => setAuthScreen("login")} />
         )}
