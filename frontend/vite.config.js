@@ -9,7 +9,7 @@ export default defineConfig({
     allowedHosts: ['cupid-browse-poet.ngrok-free.dev'], // 👈 이 줄이 추가되었습니다!
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
