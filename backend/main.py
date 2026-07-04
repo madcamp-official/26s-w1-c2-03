@@ -359,6 +359,30 @@ def get_checkins(store_id: Optional[str] = None, user_id: Optional[str] = None, 
     return result.data
 
 
+@app.get("/stores/{store_id}/ranking")
+def get_store_ranking(store_id: str):
+    # 매장 상세 화면의 "방문 랭킹" — 그 매장에서 승인된 체크인을 유저별로 세어 방문 횟수 내림차순으로 반환
+    db = require_supabase()
+    result = safe_execute(
+        db.table("checkins")
+        .select("user_id, users(nickname)")
+        .eq("store_id", store_id)
+        .eq("status", "approved"),
+        "방문 랭킹 조회 실패",
+    )
+
+    counts: dict[str, int] = {}
+    nicknames: dict[str, str] = {}
+    for c in result.data:
+        user_id = c["user_id"]
+        counts[user_id] = counts.get(user_id, 0) + 1
+        nicknames[user_id] = (c.get("users") or {}).get("nickname")
+
+    ranking = [{"user_id": uid, "nickname": nicknames.get(uid), "count": count} for uid, count in counts.items()]
+    ranking.sort(key=lambda r: r["count"], reverse=True)
+    return ranking
+
+
 @app.post("/checkins")
 async def create_checkin(
     user_id: str = Form(...),
