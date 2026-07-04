@@ -21,7 +21,9 @@ app = FastAPI(title="맛짱(Matzzang) API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    # 로컬 개발 중엔 5173번이 이미 사용 중이면 Vite가 5174, 5175...로 자동으로 옮겨감.
+    # 매번 여기 포트를 손대지 않도록 정규식으로 localhost의 모든 포트를 허용.
+    allow_origin_regex=r"http://localhost:\d+",
     allow_methods=["*"],
     allow_headers=["*"],
 )
