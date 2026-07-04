@@ -6,7 +6,7 @@ import { createStore } from "../lib/api"
 //    나중에 사장님 로그인이 생기면 이 입력칸은 없애고 로그인한 owner_id를 자동으로 씀.
 const STORE_CATEGORIES = categories.filter((c) => c !== "전체")
 
-export default function OwnerDashboardScreen({ onBack }) {
+export default function OwnerDashboardScreen() {
   const [ownerId, setOwnerId] = useState("")
   const [name, setName] = useState("")
   const [address, setAddress] = useState("")
@@ -41,15 +41,10 @@ export default function OwnerDashboardScreen({ onBack }) {
   }
 
   return (
-    <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
-      <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-        <button onClick={onBack} className="text-2xl text-slate-400">
-          ‹
-        </button>
-        <h1 className="text-lg font-semibold text-slate-900">사장님 — 매장 등록</h1>
-      </header>
+    <div className="px-5 py-6">
+      <h2 className="mb-4 text-lg font-semibold text-slate-900">매장 등록</h2>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+      <div>
         <label className="mb-1 block text-sm font-medium text-slate-600">사장님 ID</label>
         <input
           value={ownerId}
