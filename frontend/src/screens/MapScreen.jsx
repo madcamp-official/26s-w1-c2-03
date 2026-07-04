@@ -1,11 +1,12 @@
-// 카카오맵 버전 MapScreen — 실제 백엔드 API에서 매장 데이터를 가져옴
+// 카카오맵 버전 MapScreen — 실제 백엔드 API에서 매장 데이터를 가져오고,
+// 지도 중심/줌은 등록된 매장들 범위에 맞춰 자동으로 조정됨 (전국 대응)
 import { useEffect, useRef, useState } from "react"
 import { categories } from "../data/mockData"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getStores } from "../lib/api"
 
-// 지도 중심 (성수동 부근)
-const CENTER = { lat: 37.5454, lng: 127.0525 }
+// 매장 데이터가 아직 없을 때만 쓰는 기본 중심 (성수동)
+const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
 
 // 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
 const CATEGORY_EMOJI = {
@@ -70,6 +71,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   const storeOverlaysRef = useRef([])
   const userOverlayRef = useRef(null)
   const popupOverlayRef = useRef(null)
+  const didFitBoundsRef = useRef(false) // 최초 1회만 자동으로 화면을 맞추기 위한 플래그
 
   const [cat, setCat] = useState("전체")
   const [mapReady, setMapReady] = useState(false)
@@ -87,15 +89,15 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
 
   const visibleStores = stores.filter((s) => cat === "전체" || s.category === cat)
 
-  // 지도 최초 1회 생성
+  // 지도 최초 1회 생성 (일단 기본 위치로 띄우고, 매장 데이터 도착하면 자동으로 범위 맞춤)
   useEffect(() => {
     let cancelled = false
     loadKakaoMaps()
       .then((kakao) => {
         if (cancelled || !containerRef.current) return
         const map = new kakao.maps.Map(containerRef.current, {
-          center: new kakao.maps.LatLng(CENTER.lat, CENTER.lng),
-          level: 4,
+          center: new kakao.maps.LatLng(FALLBACK_CENTER.lat, FALLBACK_CENTER.lng),
+          level: 7,
         })
         mapRef.current = map
         setMapReady(true)
@@ -155,8 +157,9 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       popupOverlayRef.current = null
     }
 
-    visibleStores.forEach((s) => {
-      if (s.lat == null || s.lng == null) return // 좌표 없는 매장은 스킵
+    const withCoords = visibleStores.filter((s) => s.lat != null && s.lng != null)
+
+    withCoords.forEach((s) => {
       const position = new kakao.maps.LatLng(s.lat, s.lng)
       const el = document.createElement("div")
       el.innerHTML = makePinHtml(s)
@@ -170,10 +173,19 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       overlay.setMap(map)
       storeOverlaysRef.current.push(overlay)
     })
+
+    // 매장 데이터가 처음 도착했을 때 딱 한 번, 모든 매장이 화면 안에 들어오도록 범위 자동 조정
+    // (그 이후엔 사용자가 지도를 움직여도 다시 강제로 안 옮김)
+    if (!didFitBoundsRef.current && withCoords.length > 0) {
+      const bounds = new kakao.maps.LatLngBounds()
+      withCoords.forEach((s) => bounds.extend(new kakao.maps.LatLng(s.lat, s.lng)))
+      map.setBounds(bounds)
+      didFitBoundsRef.current = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, cat, myLocation, stores])
 
-  // 내 위치 마커 표시 + 지도 이동
+  // 내 위치 마커 표시 + 지도 이동 (사용자가 직접 "내 위치" 버튼을 눌렀을 때만)
   useEffect(() => {
     if (!mapReady || !window.kakao || !myLocation) return
     const kakao = window.kakao

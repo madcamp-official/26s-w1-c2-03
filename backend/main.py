@@ -52,8 +52,12 @@ class StoreCreate(BaseModel):
     keywords: Optional[list[str]] = None
 
 
-async def geocode_address(address: str) -> tuple[float, float]:
-    """카카오 주소검색 API로 주소를 위도/경도로 변환"""
+async def geocode_address(address: str) -> dict:
+    """
+    카카오 주소검색 API로 주소를 위도/경도 + 시도/구군 정보로 변환.
+    region_1depth_name: 시/도 (예: '서울특별시', '대전광역시')
+    region_2depth_name: 시/군/구 (예: '성동구', '유성구')
+    """
     if not KAKAO_REST_API_KEY:
         raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
 
@@ -72,11 +76,16 @@ async def geocode_address(address: str) -> tuple[float, float]:
     if not documents:
         raise HTTPException(status_code=400, detail=f"주소를 찾을 수 없습니다: {address}")
 
-    # 첫 번째 검색 결과 사용
     doc = documents[0]
     lat = float(doc["y"])
     lng = float(doc["x"])
-    return lat, lng
+
+    # 도로명 주소 우선, 없으면 지번 주소의 region 정보 사용
+    region_source = doc.get("road_address") or doc.get("address") or {}
+    sido = region_source.get("region_1depth_name")
+    gu = region_source.get("region_2depth_name")
+
+    return {"lat": lat, "lng": lng, "sido": sido, "gu": gu}
 
 
 @app.post("/stores")
@@ -84,7 +93,7 @@ async def create_store(payload: StoreCreate):
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase 연결이 설정되지 않았습니다 (.env 확인)")
 
-    lat, lng = await geocode_address(payload.address)
+    geo = await geocode_address(payload.address)
 
     row = {
         "owner_id": payload.owner_id,
@@ -92,8 +101,10 @@ async def create_store(payload: StoreCreate):
         "address": payload.address,
         "category": payload.category,
         "keywords": payload.keywords,
-        "lat": lat,
-        "lng": lng,
+        "lat": geo["lat"],
+        "lng": geo["lng"],
+        "sido": geo["sido"],
+        "gu": geo["gu"],
     }
 
     try:

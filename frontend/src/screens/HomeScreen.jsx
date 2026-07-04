@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { categories, regions } from "../data/mockData"
+import { useEffect, useMemo, useState } from "react"
+import { categories } from "../data/mockData"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getStores } from "../lib/api"
 
@@ -19,17 +19,16 @@ function emojiFor(category) {
 }
 
 // 홈 — 지역(시/도·구) 선택 또는 내 위치 기준 + 카테고리 필터
+// 지역 목록은 하드코딩하지 않고, 실제 등록된 매장들의 sido/gu 값에서 자동으로 뽑아냄 (전국 대응)
 export default function HomeScreen({ onSelectStore, myLocation, locating, onLocate }) {
-  const [sido, setSido] = useState("서울특별시")
-  const [gu, setGu] = useState("성동구")
-  const [cat, setCat] = useState("전체")
-  const [nearby, setNearby] = useState(false) // 내 위치 기준 정렬 모드
-
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const guList = regions[sido] || []
+  const [sido, setSido] = useState(null)
+  const [gu, setGu] = useState(null)
+  const [cat, setCat] = useState("전체")
+  const [nearby, setNearby] = useState(false) // 내 위치 기준 정렬 모드
 
   // 매장 목록은 화면 진입 시 한 번 백엔드에서 가져옴
   useEffect(() => {
@@ -43,10 +42,34 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .finally(() => setLoading(false))
   }, [])
 
+  // 실제 데이터에 존재하는 시/도 목록 (있는 지역만 노출됨)
+  const sidoList = useMemo(() => {
+    const set = new Set(stores.map((s) => s.sido).filter(Boolean))
+    return Array.from(set).sort()
+  }, [stores])
+
+  // 선택된 시/도 안에 실제로 존재하는 구/군 목록
+  const guList = useMemo(() => {
+    const set = new Set(stores.filter((s) => s.sido === sido).map((s) => s.gu).filter(Boolean))
+    return Array.from(set).sort()
+  }, [stores, sido])
+
+  // 매장 데이터가 로드되면 기본 시/도·구를 첫 번째 값으로 자동 선택
+  useEffect(() => {
+    if (sido || sidoList.length === 0) return
+    setSido(sidoList[0])
+  }, [sidoList, sido])
+
+  useEffect(() => {
+    if (!sido) return
+    if (gu && guList.includes(gu)) return
+    setGu(guList[0] || null)
+  }, [sido, guList, gu])
+
   const handleSido = (v) => {
     setSido(v)
-    setGu((regions[v] || [])[0] || "")
-    setNearby(false) // 지역을 고르면 위치 모드 해제
+    setGu(null) // guList useEffect 에서 자동으로 첫 값 채워짐
+    setNearby(false)
   }
   const handleNearby = async () => {
     const loc = myLocation || (await onLocate())
@@ -62,8 +85,8 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .map((s) => ({ ...s, distanceKm: haversineKm(myLocation.lat, myLocation.lng, s.lat, s.lng) }))
       .sort((a, b) => a.distanceKm - b.distanceKm)
   } else {
-    // 지역 기준: 주소에 선택한 구 이름이 포함된 매장만
-    list = list.filter((s) => s.address && s.address.includes(gu))
+    // 지역 기준: 선택한 시/도·구가 정확히 일치하는 매장만
+    list = list.filter((s) => s.sido === sido && s.gu === gu)
   }
 
   return (
@@ -76,24 +99,32 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       {/* 지역 선택 + 내 위치 */}
       <div className="flex items-center gap-2 px-5">
         <select
-          value={sido}
+          value={sido || ""}
           onChange={(e) => handleSido(e.target.value)}
+          disabled={sidoList.length === 0}
           className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm ${nearby ? "text-slate-400" : "text-slate-700"}`}
         >
-          {Object.keys(regions).map((r) => (
-            <option key={r}>{r}</option>
+          {sidoList.length === 0 && <option value="">지역 없음</option>}
+          {sidoList.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
           ))}
         </select>
         <select
-          value={gu}
+          value={gu || ""}
           onChange={(e) => {
             setGu(e.target.value)
             setNearby(false)
           }}
+          disabled={guList.length === 0}
           className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm ${nearby ? "text-slate-400" : "text-slate-700"}`}
         >
+          {guList.length === 0 && <option value="">-</option>}
           {guList.map((g) => (
-            <option key={g}>{g}</option>
+            <option key={g} value={g}>
+              {g}
+            </option>
           ))}
         </select>
         <button
