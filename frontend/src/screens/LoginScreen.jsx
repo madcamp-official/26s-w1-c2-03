@@ -2,7 +2,7 @@ import { useState } from "react"
 
 // 로그인 — 아이디 + 비밀번호
 // ⚠️ 지금은 뼈대라 입력값만 채우면 통과. 실제 검증은 나중에 서버(POST /auth/login)에서.
-export default function LoginScreen({ onLogin, goSignup }) {
+export default function LoginScreen({ onLogin, goSignup, goOwner }) {
   const [id, setId] = useState("")
   const [pw, setPw] = useState("")
   const canSubmit = id.trim() && pw.trim()
@@ -47,6 +47,12 @@ export default function LoginScreen({ onLogin, goSignup }) {
           회원가입
         </button>
       </p>
+
+      {goOwner && (
+        <button onClick={goOwner} className="mt-3 text-center text-xs text-slate-400 underline">
+          사장님이신가요? 사장님 모드로 가기
+        </button>
+      )}
     </div>
   )
 }

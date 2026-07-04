@@ -47,11 +47,14 @@ users ──< reviews >── stores
 | created_at | timestamptz | 등록 시각 |
 
 ### users (손님)
+> 카카오 로그인이 기본, 아이디/비번 로그인은 백업 수단 — 그래서 아래 인증 관련 컬럼은 전부 선택값(nullable)
+
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | uuid | 고유 번호 |
-| login_id | text | 로그인 아이디 (중복 불가) |
-| password_hash | text | 비밀번호 **해시값** (원문 저장 금지) |
+| login_id | text | 로그인 아이디 (간단 로그인 시, 중복 불가) |
+| password_hash | text | 비밀번호 **해시값** (간단 로그인 시, 원문 저장 금지) |
+| kakao_id | text | 카카오 고유 ID (카카오 로그인 시, 중복 불가) |
 | nickname | text | 닉네임 (지도·랭킹에 표시) |
 | created_at | timestamptz | 가입 시각 |
 
@@ -159,10 +162,13 @@ create table stores (
 );
 
 -- 3. 손님
+-- 카카오 로그인이 기본 수단이 되면서 아이디/비번 로그인은 백업 수단으로 남음.
+-- 그래서 login_id/password_hash와 kakao_id 모두 선택값(nullable) — 가입 방식에 따라 하나만 채워짐.
 create table users (
   id uuid primary key default gen_random_uuid(),
-  login_id text unique not null,    -- 로그인 아이디 (중복 불가)
-  password_hash text not null,      -- 비밀번호 해시 (원문 저장 금지)
+  login_id text unique,              -- 로그인 아이디 (간단 로그인 사용 시)
+  password_hash text,                -- 비밀번호 해시 (간단 로그인 사용 시, 원문 저장 금지)
+  kakao_id text unique,               -- 카카오 고유 ID (카카오 로그인 사용 시)
   nickname text not null,
   created_at timestamptz default now()
 );
