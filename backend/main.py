@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from postgrest.exceptions import APIError
 
 load_dotenv()
 
@@ -37,6 +38,19 @@ def require_supabase():
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase 연결이 설정되지 않았습니다 (.env 확인)")
     return supabase
+
+
+def safe_execute(query, error_message: str = "요청 처리 중 오류가 발생했습니다"):
+    """
+    Supabase 쿼리 실행 중 에러가 나면 깔끔한 HTTPException으로 바꿔줌.
+    사용법: safe_execute(db.table('stores').select('*'), '매장 목록 조회 실패')
+    """
+    try:
+        return query.execute()
+    except APIError as e:
+        raise HTTPException(status_code=400, detail=f"{error_message}: {e.message}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{error_message}: {str(e)}")
 
 
 @app.get("/health")

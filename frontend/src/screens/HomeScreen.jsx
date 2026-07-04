@@ -13,24 +13,25 @@ const CATEGORY_EMOJI = {
   술집: "🍺",
   디저트: "🍰",
 }
-function emojiFor(category) {
-  return CATEGORY_EMOJI[category] || "🍽️"
+function emojiFor(categories) {
+  const first = categories?.[0]
+  return CATEGORY_EMOJI[first] || "🍽️"
 }
 
 // 홈 — 지역(시/도·구) 선택 또는 내 위치 기준 + 카테고리 필터
-// 지역 목록은 하드코딩하지 않고, 실제 등록된 매장들의 sido/gu 값에서 자동으로 뽑아냄 (전국 대응)
+// 지역 목록은 실제 등록된 매장들의 sido/gu 값에서, 카테고리 목록은 백엔드 /categories에서 실시간으로 가져옴
 export default function HomeScreen({ onSelectStore, myLocation, locating, onLocate }) {
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [categoryOptions, setCategoryOptions] = useState([])
+
+  const [categoryOptions, setCategoryOptions] = useState([]) // ["카페", "한식", ...]
 
   const [sido, setSido] = useState(null)
   const [gu, setGu] = useState(null)
   const [cat, setCat] = useState("전체")
   const [nearby, setNearby] = useState(false) // 내 위치 기준 정렬 모드
 
-  // 매장 목록은 화면 진입 시 한 번 백엔드에서 가져옴
   useEffect(() => {
     setLoading(true)
     getStores()
@@ -44,9 +45,11 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
   useEffect(() => {
     getCategoryOptions()
-      .then((options) => setCategoryOptions(options.map((o) => o.name)))
-      .catch(() => setCategoryOptions([]))
+      .then((opts) => setCategoryOptions(opts.map((o) => o.name)))
+      .catch(() => setCategoryOptions([])) // 실패해도 "전체"만으로 화면은 뜨게
   }, [])
+
+  const catChips = ["전체", ...categoryOptions]
 
   // 실제 데이터에 존재하는 시/도 목록 (있는 지역만 노출됨)
   const sidoList = useMemo(() => {
@@ -54,13 +57,11 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     return Array.from(set).sort()
   }, [stores])
 
-  // 선택된 시/도 안에 실제로 존재하는 구/군 목록
   const guList = useMemo(() => {
     const set = new Set(stores.filter((s) => s.sido === sido).map((s) => s.gu).filter(Boolean))
     return Array.from(set).sort()
   }, [stores, sido])
 
-  // 매장 데이터가 로드되면 기본 시/도·구를 첫 번째 값으로 자동 선택
   useEffect(() => {
     if (sido || sidoList.length === 0) return
     setSido(sidoList[0])
@@ -74,7 +75,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
   const handleSido = (v) => {
     setSido(v)
-    setGu(null) // guList useEffect 에서 자동으로 첫 값 채워짐
+    setGu(null)
     setNearby(false)
   }
   const handleNearby = async () => {
@@ -82,16 +83,14 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     if (loc) setNearby(true)
   }
 
-  // 카테고리 필터
+  // 카테고리 필터 — 이제 categories는 배열이라 포함 여부로 판단
   let list = stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
 
   if (nearby && myLocation) {
-    // 내 위치 기준: 거리 계산 후 가까운 순
     list = list
       .map((s) => ({ ...s, distanceKm: haversineKm(myLocation.lat, myLocation.lng, s.lat, s.lng) }))
       .sort((a, b) => a.distanceKm - b.distanceKm)
   } else {
-    // 지역 기준: 선택한 시/도·구가 정확히 일치하는 매장만
     list = list.filter((s) => s.sido === sido && s.gu === gu)
   }
 
@@ -102,7 +101,6 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         <h1 className="text-2xl font-bold text-slate-900">맛짱</h1>
       </header>
 
-      {/* 지역 선택 + 내 위치 */}
       <div className="flex items-center gap-2 px-5">
         <select
           value={sido || ""}
@@ -148,9 +146,8 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         </p>
       )}
 
-      {/* 카테고리 칩 */}
       <div className="mt-3 flex gap-2 overflow-x-auto px-5 pb-4">
-        {["전체", ...categoryOptions].map((c) => (
+        {catChips.map((c) => (
           <button
             key={c}
             onClick={() => setCat(c)}
@@ -161,7 +158,6 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         ))}
       </div>
 
-      {/* 매장 목록 */}
       <div className="space-y-3 px-5">
         {loading && <p className="py-10 text-center text-slate-400">불러오는 중...</p>}
 
@@ -182,7 +178,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
               className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
             >
               <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-50 text-2xl">
-                {emojiFor((s.categories || [])[0])}
+                {emojiFor(s.categories)}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">

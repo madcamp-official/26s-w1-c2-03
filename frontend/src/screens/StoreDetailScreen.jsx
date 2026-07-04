@@ -11,15 +11,16 @@ const CATEGORY_EMOJI = {
   술집: "🍺",
   디저트: "🍰",
 }
-function emojiFor(category) {
-  return CATEGORY_EMOJI[category] || "🍽️"
+function emojiFor(categories) {
+  const first = categories?.[0]
+  return CATEGORY_EMOJI[first] || "🍽️"
 }
 
 export default function StoreDetailScreen({ store, onBack, onCheckin }) {
   if (!store) return null
 
+  const categories = store.categories || []
   const keywords = store.keywords || []
-  const storeCategories = store.categories || []
   const topVisitors = store.topVisitors || []
   const rewards = store.rewards || []
 
@@ -34,12 +35,12 @@ export default function StoreDetailScreen({ store, onBack, onCheckin }) {
 
       <div className="px-5">
         <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl">
-          {emojiFor(storeCategories[0])}
+          {emojiFor(categories)}
         </div>
 
         <h2 className="mt-4 text-2xl font-bold text-slate-900">{store.name}</h2>
         <p className="text-slate-500">
-          {storeCategories.join(", ")} · {store.address}
+          {categories.join(", ")} · {store.address}
         </p>
         {keywords.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">

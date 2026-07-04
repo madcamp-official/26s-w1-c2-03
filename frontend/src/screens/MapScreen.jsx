@@ -4,10 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getStores, getCategoryOptions } from "../lib/api"
 
-// 매장 데이터가 아직 없을 때만 쓰는 기본 중심 (성수동)
 const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
 
-// 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
 const CATEGORY_EMOJI = {
   카페: "☕",
   한식: "🍚",
@@ -18,11 +16,11 @@ const CATEGORY_EMOJI = {
   술집: "🍺",
   디저트: "🍰",
 }
-function emojiFor(category) {
-  return CATEGORY_EMOJI[category] || "🍽️"
+function emojiFor(categories) {
+  const first = categories?.[0]
+  return CATEGORY_EMOJI[first] || "🍽️"
 }
 
-// index.html 의 sdk.js 스크립트가 로드될 때까지 기다렸다가 kakao.maps.load 콜백을 프로미스로 감싸줌
 function loadKakaoMaps() {
   return new Promise((resolve, reject) => {
     if (window.kakao && window.kakao.maps) {
@@ -41,7 +39,6 @@ function loadKakaoMaps() {
   })
 }
 
-// 매장 핀 HTML — 방문한 곳은 주황, 안 간 곳은 흰색
 function makePinHtml(store) {
   const visited = (store.myStamps ?? 0) > 0
   const bg = visited ? "#f59e0b" : "#ffffff"
@@ -55,11 +52,10 @@ function makePinHtml(store) {
       background:${bg};border:${border};
       box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:${opacity};
       cursor:pointer;">
-      <span style="transform:rotate(45deg);font-size:20px;">${emojiFor((store.categories || [])[0])}</span>
+      <span style="transform:rotate(45deg);font-size:20px;">${emojiFor(store.categories)}</span>
     </div>`
 }
 
-// 내 위치 파란 점 HTML
 function makeUserHtml() {
   return `<div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 5px rgba(59,130,246,.25)"></div>`
 }
@@ -70,17 +66,16 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   const storeOverlaysRef = useRef([])
   const userOverlayRef = useRef(null)
   const popupOverlayRef = useRef(null)
-  const didFitBoundsRef = useRef(false) // 최초 1회만 자동으로 화면을 맞추기 위한 플래그
+  const didFitBoundsRef = useRef(false)
 
   const [cat, setCat] = useState("전체")
+  const [categoryOptions, setCategoryOptions] = useState([])
   const [mapReady, setMapReady] = useState(false)
   const [sdkError, setSdkError] = useState(null)
 
   const [stores, setStores] = useState([])
   const [loadError, setLoadError] = useState(null)
-  const [categoryOptions, setCategoryOptions] = useState([])
 
-  // 매장 목록은 화면 진입 시 한 번 백엔드에서 가져옴
   useEffect(() => {
     getStores()
       .then(setStores)
@@ -89,13 +84,13 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
 
   useEffect(() => {
     getCategoryOptions()
-      .then((options) => setCategoryOptions(options.map((o) => o.name)))
+      .then((opts) => setCategoryOptions(opts.map((o) => o.name)))
       .catch(() => setCategoryOptions([]))
   }, [])
 
+  const catChips = ["전체", ...categoryOptions]
   const visibleStores = stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
 
-  // 지도 최초 1회 생성 (일단 기본 위치로 띄우고, 매장 데이터 도착하면 자동으로 범위 맞춤)
   useEffect(() => {
     let cancelled = false
     loadKakaoMaps()
@@ -115,14 +110,13 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     }
   }, [])
 
-  // 매장 클릭 시 팝업(CustomOverlay) 표시
   function showPopup(kakao, map, store, position) {
     if (popupOverlayRef.current) popupOverlayRef.current.setMap(null)
 
     const el = document.createElement("div")
     el.innerHTML = `
       <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
-        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor((store.categories || [])[0])} ${store.name}</p>
+        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.categories)} ${store.name}</p>
         <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
           ${(store.categories || []).join(", ")}${(store.myStamps ?? 0) > 0 ? ` · 방문 ${store.myStamps}회 ✅` : " · 아직 안 감"}
         </p>
@@ -150,7 +144,6 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     popupOverlayRef.current = overlay
   }
 
-  // 매장 마커 렌더링 (매장 데이터/카테고리 필터 바뀔 때마다 다시 그림)
   useEffect(() => {
     if (!mapReady || !window.kakao) return
     const kakao = window.kakao
@@ -180,8 +173,6 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       storeOverlaysRef.current.push(overlay)
     })
 
-    // 매장 데이터가 처음 도착했을 때 딱 한 번, 모든 매장이 화면 안에 들어오도록 범위 자동 조정
-    // (그 이후엔 사용자가 지도를 움직여도 다시 강제로 안 옮김)
     if (!didFitBoundsRef.current && withCoords.length > 0) {
       const bounds = new kakao.maps.LatLngBounds()
       withCoords.forEach((s) => bounds.extend(new kakao.maps.LatLng(s.lat, s.lng)))
@@ -191,7 +182,6 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, cat, myLocation, stores])
 
-  // 내 위치 마커 표시 + 지도 이동 (사용자가 직접 "내 위치" 버튼을 눌렀을 때만)
   useEffect(() => {
     if (!mapReady || !window.kakao || !myLocation) return
     const kakao = window.kakao
@@ -225,9 +215,8 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
         </div>
       )}
 
-      {/* 상단 카테고리 필터 */}
       <div className="absolute inset-x-0 top-0 z-[1000] flex gap-2 overflow-x-auto bg-gradient-to-b from-white/95 to-transparent px-3 py-3">
-        {["전체", ...categoryOptions].map((c) => (
+        {catChips.map((c) => (
           <button
             key={c}
             onClick={() => setCat(c)}
@@ -238,7 +227,6 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
         ))}
       </div>
 
-      {/* 범례 (좌하단) */}
       <div className="pointer-events-none absolute bottom-8 left-3 z-[1000] rounded-xl bg-white/95 px-3 py-2 shadow-md">
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1">
@@ -250,7 +238,6 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
         </div>
       </div>
 
-      {/* 내 위치 버튼 */}
       <button
         onClick={onLocate}
         disabled={locating}
