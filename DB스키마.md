@@ -60,7 +60,7 @@ users ──< reviews >── stores
 > 매장 등록 폼과 뱃지 조건 폼 모두 여기서 목록을 받아와 선택지로 보여줌. 관리자 페이지에서 추가만 가능(자유 텍스트 입력 폐지).
 
 ### users (손님)
-> 카카오/구글 로그인이 기본, 아이디/비번 로그인은 백업 수단 — 그래서 아래 인증 관련 컬럼은 전부 선택값(nullable)
+> 카카오/구글/네이버 로그인이 기본, 아이디/비번 로그인은 백업 수단 — 그래서 아래 인증 관련 컬럼은 전부 선택값(nullable)
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
@@ -69,6 +69,7 @@ users ──< reviews >── stores
 | password_hash | text | 비밀번호 **해시값** (간단 로그인 시, 원문 저장 금지) |
 | kakao_id | text | 카카오 고유 ID (카카오 로그인 시, 중복 불가) |
 | google_id | text | 구글 고유 ID (구글 로그인 시, 중복 불가) |
+| naver_id | text | 네이버 고유 ID (네이버 로그인 시, 중복 불가) |
 | nickname | text | 닉네임 (지도·랭킹에 표시) |
 | created_at | timestamptz | 가입 시각 |
 
@@ -219,6 +220,7 @@ create table users (
   password_hash text,                -- 비밀번호 해시 (간단 로그인 사용 시, 원문 저장 금지)
   kakao_id text unique,               -- 카카오 고유 ID (카카오 로그인 사용 시)
   google_id text unique,              -- 구글 고유 ID (구글 로그인 사용 시)
+  naver_id text unique,               -- 네이버 고유 ID (네이버 로그인 사용 시)
   nickname text not null,
   created_at timestamptz default now()
 );
@@ -246,6 +248,9 @@ alter table checkins add column if not exists stamp_count int default 1;
 
 -- ⚠️ [아직 실행 안 함 — 매장 중복 등록 방지(카카오 장소 ID 기반)에 필요, 지금 Supabase SQL Editor에서 실행]
 alter table stores add column if not exists kakao_place_id text;
+
+-- ⚠️ [아직 실행 안 함 — 네이버 로그인 쓰려면 지금 이 한 줄만 Supabase SQL Editor에서 실행]
+alter table users add column if not exists naver_id text unique;
 
 -- 5. 뱃지 정의
 create table badges (

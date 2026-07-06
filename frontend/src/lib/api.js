@@ -72,6 +72,14 @@ export function loginWithGoogle({ code, redirectUri }) {
   })
 }
 
+// 네이버 로그인 — 카카오/구글과 동일한 방식. 네이버는 CSRF 방지용 state를 발급 시 값 그대로 넘겨줘야 함
+export function loginWithNaver({ code, redirectUri, state }) {
+  return requestJSON("/auth/naver", {
+    method: "POST",
+    body: JSON.stringify({ code, redirect_uri: redirectUri, state }),
+  })
+}
+
 // 닉네임 중복확인 (excludeUserId를 넘기면 본인 닉네임은 중복으로 안 침)
 export function checkNickname(nickname, excludeUserId) {
   const params = new URLSearchParams({ nickname })

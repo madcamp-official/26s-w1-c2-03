@@ -10,7 +10,7 @@ import EditProfileScreen from "./screens/EditProfileScreen"
 import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
-import { loginWithKakao, loginWithGoogle } from "./lib/api"
+import { loginWithKakao, loginWithGoogle, loginWithNaver } from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
@@ -21,7 +21,7 @@ export default function CustomerApp({ onGoOwner }) {
   const [user, setUser] = useState(loadUser)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [authError, setAuthError] = useState(null)
-  const [authLoading, setAuthLoading] = useState(false) // 카카오/구글 로그인 공용 로딩 상태
+  const [authLoading, setAuthLoading] = useState(false) // 카카오/구글/네이버 로그인 공용 로딩 상태
   const handledAuthCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
 
   const [screen, setScreen] = useState("home")
@@ -53,7 +53,7 @@ export default function CustomerApp({ onGoOwner }) {
     }
   }, [])
 
-  // 카카오/구글 로그인 후 리다이렉트되어 돌아왔을 때 (?code=...&state=kakao|google 처리)
+  // 카카오/구글/네이버 로그인 후 리다이렉트되어 돌아왔을 때 (?code=...&state=kakao|google|naver 처리)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const code = params.get("code")
@@ -69,7 +69,8 @@ export default function CustomerApp({ onGoOwner }) {
     if (code && !handledAuthCode.current) {
       handledAuthCode.current = true
       setAuthLoading(true)
-      const login = state === "google" ? loginWithGoogle : loginWithKakao
+      const login =
+        state === "google" ? loginWithGoogle : state === "naver" ? (args) => loginWithNaver({ ...args, state }) : loginWithKakao
       login({ code, redirectUri: window.location.origin })
         .then((u) => {
           saveUser(u)
@@ -108,6 +109,23 @@ export default function CustomerApp({ onGoOwner }) {
       state: "google",
     })
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
+  }
+
+  // 네이버도 구글과 동일한 방식(별도 SDK 없이 직접 리다이렉트)
+  const startNaverLogin = () => {
+    setAuthError(null)
+    const clientId = import.meta.env.VITE_NAVER_CLIENT_ID
+    if (!clientId) {
+      setAuthError("VITE_NAVER_CLIENT_ID가 설정되지 않았어요 (frontend/.env 확인)")
+      return
+    }
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: window.location.origin,
+      response_type: "code",
+      state: "naver",
+    })
+    window.location.href = `https://nid.naver.com/oauth2.0/authorize?${params.toString()}`
   }
 
   const logout = () => {
@@ -149,7 +167,7 @@ export default function CustomerApp({ onGoOwner }) {
     return loc
   }
 
-  // 로그인은 카카오/구글 둘 중 하나 (아이디/비번 로그인은 더 이상 노출 안 함)
+  // 로그인은 카카오/구글/네이버 중 하나 (아이디/비번 로그인은 더 이상 노출 안 함)
   if (!user) {
     return (
       <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col items-center justify-center bg-white px-8">
@@ -174,9 +192,17 @@ export default function CustomerApp({ onGoOwner }) {
         <button
           onClick={startGoogleLogin}
           disabled={authLoading}
-          className="w-full rounded-xl border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-700 shadow-sm"
+          className="mb-2 w-full rounded-xl border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-700 shadow-sm"
         >
           {authLoading ? "로그인 처리 중..." : "🔍 구글로 시작하기"}
+        </button>
+
+        <button
+          onClick={startNaverLogin}
+          disabled={authLoading}
+          className="w-full rounded-xl bg-[#03C75A] py-3.5 text-sm font-semibold text-white shadow-sm"
+        >
+          {authLoading ? "로그인 처리 중..." : "N 네이버로 시작하기"}
         </button>
       </div>
     )

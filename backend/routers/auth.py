@@ -9,6 +9,8 @@ from deps import (
     GOOGLE_CLIENT_SECRET,
     KAKAO_CLIENT_SECRET,
     KAKAO_REST_API_KEY,
+    NAVER_CLIENT_ID,
+    NAVER_CLIENT_SECRET,
     PROFILE_BUCKET,
     require_supabase,
     safe_execute,
@@ -241,4 +243,67 @@ async def google_login(payload: GoogleLoginRequest):
         return {**existing.data[0], "is_new": False}
 
     result = db.table("users").insert({"google_id": google_id, "nickname": nickname}).execute()
+    return {**result.data[0], "is_new": True}
+
+
+# ---------------------------------------------------------------------
+# 네이버 로그인 (카카오/구글과 동일한 authorization code 플로우)
+# ---------------------------------------------------------------------
+
+
+class NaverLoginRequest(BaseModel):
+    code: str
+    redirect_uri: str
+    state: str
+
+
+@router.post("/auth/naver")
+async def naver_login(payload: NaverLoginRequest):
+    db = require_supabase()
+    if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="NAVER_CLIENT_ID/NAVER_CLIENT_SECRET이 설정되지 않았습니다 (.env 확인)")
+
+    # 1. 인가 코드 -> 액세스 토큰 교환 (네이버는 CSRF 방지용 state를 발급/교환 양쪽에 동일하게 실어야 함)
+    token_params = {
+        "grant_type": "authorization_code",
+        "client_id": NAVER_CLIENT_ID,
+        "client_secret": NAVER_CLIENT_SECRET,
+        "redirect_uri": payload.redirect_uri,
+        "code": payload.code,
+        "state": payload.state,
+    }
+
+    async with httpx.AsyncClient() as client:
+        token_res = await client.get("https://nid.naver.com/oauth2.0/token", params=token_params)
+
+    if token_res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"네이버 토큰 발급 실패: {token_res.text}")
+
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=502, detail=f"네이버 토큰 발급 실패: {token_data}")
+
+    # 2. 액세스 토큰으로 사용자 정보 조회
+    async with httpx.AsyncClient() as client:
+        profile_res = await client.get(
+            "https://openapi.naver.com/v1/nid/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    if profile_res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"네이버 사용자 정보 조회 실패: {profile_res.text}")
+
+    profile = profile_res.json().get("response") or {}
+    naver_id = profile.get("id")
+    if not naver_id:
+        raise HTTPException(status_code=502, detail="네이버 사용자 정보에 id가 없습니다.")
+    nickname = profile.get("nickname") or profile.get("name") or "네이버사용자"
+
+    # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
+    existing = db.table("users").select("*").eq("naver_id", naver_id).execute()
+    if existing.data:
+        return {**existing.data[0], "is_new": False}
+
+    result = db.table("users").insert({"naver_id": naver_id, "nickname": nickname}).execute()
     return {**result.data[0], "is_new": True}
