@@ -91,145 +91,152 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
         <h1 className="text-lg font-semibold text-slate-900">매장 정보</h1>
       </header>
 
-      <div className="px-5">
-        {store.image_url ? (
-          <img
-            src={store.image_url}
-            alt={store.name}
-            className="h-48 w-full rounded-3xl object-cover"
-          />
-        ) : (
-          <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl">
-            {emojiFor(categories)}
-          </div>
-        )}
+      {/* lg 이상(PC/태블릿 가로)에서는 기본정보/리워드/인증버튼(왼쪽)과 랭킹/사진(오른쪽) 2열로 배치 */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-8 lg:px-8">
+        <div>
+          <div className="px-5 lg:px-0">
+            {store.image_url ? (
+              <img
+                src={store.image_url}
+                alt={store.name}
+                className="h-48 w-full rounded-3xl object-cover lg:h-64"
+              />
+            ) : (
+              <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl lg:h-64">
+                {emojiFor(categories)}
+              </div>
+            )}
 
-        <h2 className="mt-4 text-2xl font-bold text-slate-900">{store.name}</h2>
-        <p className="text-slate-500">
-          {categories.join(", ")} · {store.address}
-        </p>
-        {keywords.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {keywords.map((k) => (
-              <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                #{k}
-              </span>
-            ))}
-          </div>
-        )}
+            <h2 className="mt-4 text-2xl font-bold text-slate-900">{store.name}</h2>
+            <p className="text-slate-500">
+              {categories.join(", ")} · {store.address}
+            </p>
+            {keywords.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {keywords.map((k) => (
+                  <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                    #{k}
+                  </span>
+                ))}
+              </div>
+            )}
 
-        {/* 내 스탬프 */}
-        <div className="mt-5 rounded-2xl bg-amber-500 p-4 text-white">
-          <p className="text-sm opacity-90">내 스탬프</p>
-          <p className="text-2xl font-bold">
-            {myStamps}개
-            {store.myRank ? ` · 현재 ${store.myRank}위 🏅` : ""}
-          </p>
+            {/* 내 스탬프 */}
+            <div className="mt-5 rounded-2xl bg-amber-500 p-4 text-white">
+              <p className="text-sm opacity-90">내 스탬프</p>
+              <p className="text-2xl font-bold">
+                {myStamps}개
+                {store.myRank ? ` · 현재 ${store.myRank}위 🏅` : ""}
+              </p>
+            </div>
+
+            {/* 사장님 리워드 — 스탬프 개수 달성형 (이미 달성한 건 "달성!" 표시) */}
+            <section className="mt-6">
+              <h3 className="mb-2 font-semibold text-slate-900">사장님 리워드 🎁</h3>
+              {rewards === null ? (
+                <p className="text-sm text-slate-400">불러오는 중...</p>
+              ) : rewards.length === 0 ? (
+                <p className="text-sm text-slate-400">아직 등록된 리워드가 없어요</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {rewards.map((r) => {
+                    const achieved = myStamps >= r.stamp_threshold
+                    const claimStatus = claimsByReward[r.id]
+                    return (
+                      <div
+                        key={r.id}
+                        className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+                      >
+                        <p className="text-sm text-amber-800">
+                          <b>스탬프 {r.stamp_threshold}개</b> → {rewardLabel(r)}
+                        </p>
+                        {achieved && claimStatus === "approved" && (
+                          <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-semibold text-white">
+                            받음 ✅
+                          </span>
+                        )}
+                        {achieved && claimStatus === "pending" && (
+                          <span className="rounded-full bg-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                            요청됨
+                          </span>
+                        )}
+                        {achieved && !claimStatus && (
+                          <button
+                            onClick={() => handleClaim(r.id)}
+                            disabled={claimingId === r.id}
+                            className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white active:bg-amber-600 disabled:opacity-60"
+                          >
+                            {claimingId === r.id ? "요청 중..." : "수령하기"}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+
+          {/* 인증 버튼 */}
+          <div className="px-5 pt-6 lg:px-0">
+            <button
+              onClick={onCheckin}
+              className="w-full rounded-2xl bg-amber-500 py-4 font-semibold text-white active:bg-amber-600"
+            >
+              📸 방문 인증하기
+            </button>
+          </div>
         </div>
 
-        {/* 사장님 리워드 — 스탬프 개수 달성형 (이미 달성한 건 "달성!" 표시) */}
-        <section className="mt-6">
-          <h3 className="mb-2 font-semibold text-slate-900">사장님 리워드 🎁</h3>
-          {rewards === null ? (
-            <p className="text-sm text-slate-400">불러오는 중...</p>
-          ) : rewards.length === 0 ? (
-            <p className="text-sm text-slate-400">아직 등록된 리워드가 없어요</p>
-          ) : (
-            <div className="space-y-1.5">
-              {rewards.map((r) => {
-                const achieved = myStamps >= r.stamp_threshold
-                const claimStatus = claimsByReward[r.id]
-                return (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+        <div>
+          {/* 방문 랭킹 — 이 매장에서 승인된 체크인 기준 실제 데이터. 프로필을 눌러도 뱃지만 보여줌 (동선 노출 방지) */}
+          <div className="px-5 pt-6 lg:px-0 lg:pt-0">
+            <h3 className="mb-2 font-semibold text-slate-900">방문 랭킹</h3>
+            {ranking === null ? (
+              <p className="text-sm text-slate-400">불러오는 중...</p>
+            ) : ranking.length === 0 ? (
+              <p className="text-sm text-slate-400">아직 방문 인증 기록이 없어요</p>
+            ) : (
+              <div className="space-y-1.5">
+                {ranking.slice(0, 20).map((v, i) => (
+                  <button
+                    key={v.user_id}
+                    onClick={() => onSelectProfile(v)}
+                    className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5 text-left"
                   >
-                    <p className="text-sm text-amber-800">
-                      <b>스탬프 {r.stamp_threshold}개</b> → {rewardLabel(r)}
-                    </p>
-                    {achieved && claimStatus === "approved" && (
-                      <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-semibold text-white">
-                        받음 ✅
-                      </span>
-                    )}
-                    {achieved && claimStatus === "pending" && (
-                      <span className="rounded-full bg-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        요청됨
-                      </span>
-                    )}
-                    {achieved && !claimStatus && (
-                      <button
-                        onClick={() => handleClaim(r.id)}
-                        disabled={claimingId === r.id}
-                        className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white active:bg-amber-600 disabled:opacity-60"
-                      >
-                        {claimingId === r.id ? "요청 중..." : "수령하기"}
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-
-      {/* 인증 버튼 */}
-      <div className="px-5 pt-6">
-        <button
-          onClick={onCheckin}
-          className="w-full rounded-2xl bg-amber-500 py-4 font-semibold text-white active:bg-amber-600"
-        >
-          📸 방문 인증하기
-        </button>
-      </div>
-
-      {/* 방문 랭킹 — 이 매장에서 승인된 체크인 기준 실제 데이터. 프로필을 눌러도 뱃지만 보여줌 (동선 노출 방지) */}
-      <div className="px-5 pt-6">
-        <h3 className="mb-2 font-semibold text-slate-900">방문 랭킹</h3>
-        {ranking === null ? (
-          <p className="text-sm text-slate-400">불러오는 중...</p>
-        ) : ranking.length === 0 ? (
-          <p className="text-sm text-slate-400">아직 방문 인증 기록이 없어요</p>
-        ) : (
-          <div className="space-y-1.5">
-            {ranking.slice(0, 20).map((v, i) => (
-              <button
-                key={v.user_id}
-                onClick={() => onSelectProfile(v)}
-                className="flex w-full items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5 text-left"
-              >
-                <span className="text-slate-700">
-                  <b className="mr-2 text-amber-600">{i + 1}위</b>
-                  {v.nickname}
-                </span>
-                <span className="text-sm text-slate-400">{v.count}회</span>
-              </button>
-            ))}
+                    <span className="text-slate-700">
+                      <b className="mr-2 text-amber-600">{i + 1}위</b>
+                      {v.nickname}
+                    </span>
+                    <span className="text-sm text-slate-400">{v.count}회</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* 손님이 보낸 사진 — 승인된 인증 사진 중 공개에 동의한 것만 */}
-      <div className="px-5 pt-6">
-        <h3 className="mb-2 font-semibold text-slate-900">손님이 보낸 사진</h3>
-        {photos === null ? (
-          <p className="text-sm text-slate-400">불러오는 중...</p>
-        ) : photos.length === 0 ? (
-          <p className="text-sm text-slate-400">아직 공개된 인증 사진이 없어요</p>
-        ) : (
-          <div className="grid grid-cols-3 gap-1.5">
-            {photos.map((p, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedPhoto(p)}
-                className="aspect-square overflow-hidden rounded-xl bg-slate-100"
-              >
-                <img src={p.photo_url} alt={p.purpose || "인증 사진"} className="h-full w-full object-cover" />
-              </button>
-            ))}
+          {/* 손님이 보낸 사진 — 승인된 인증 사진 중 공개에 동의한 것만 */}
+          <div className="px-5 pt-6 lg:px-0">
+            <h3 className="mb-2 font-semibold text-slate-900">손님이 보낸 사진</h3>
+            {photos === null ? (
+              <p className="text-sm text-slate-400">불러오는 중...</p>
+            ) : photos.length === 0 ? (
+              <p className="text-sm text-slate-400">아직 공개된 인증 사진이 없어요</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5">
+                {photos.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedPhoto(p)}
+                    className="aspect-square overflow-hidden rounded-xl bg-slate-100"
+                  >
+                    <img src={p.photo_url} alt={p.purpose || "인증 사진"} className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* 사진 크게 보기 — 바깥 탭하면 닫힘 */}

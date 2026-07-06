@@ -132,7 +132,8 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
   return (
     <div>
-      <header className="flex items-center gap-2 px-5 pt-6 pb-3">
+      {/* lg 이상(PC/태블릿 가로)에서는 SideNav에 이미 로고가 있어서 중복 표시하지 않음 */}
+      <header className="flex items-center gap-2 px-5 pt-6 pb-3 lg:hidden">
         <img src="/app-icon.svg" alt="" className="h-8 w-8" />
         <h1 className="text-2xl font-bold text-slate-900">맛짱</h1>
       </header>
@@ -182,7 +183,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         ))}
       </div>
 
-      <div className="space-y-3 px-5">
+      <div className="px-5">
         {loading && <p className="py-10 text-center text-slate-400">불러오는 중...</p>}
 
         {!loading && error && (
@@ -196,56 +197,58 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         )}
 
         {!loading && !error && isSearching && list.length > 0 && (
-          <p className="text-xs text-slate-400">검색 결과 {list.length}개</p>
+          <p className="mb-3 text-xs text-slate-400">검색 결과 {list.length}개</p>
         )}
 
-        {!loading &&
-          !error &&
-          list.map((s) => (
-            <button
-              key={s.kakao_place_id}
-              onClick={() => onSelectStore(s)}
-              className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
-            >
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-2xl">
-                {s.image_url ? (
-                  <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
-                ) : (
-                  emojiFor(s.categories)
-                )}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="font-semibold text-slate-900">{s.name}</h2>
-                  {s.distanceKm != null && (
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
-                      📍 {formatDistance(s.distanceKm)}
-                    </span>
-                  )}
-                  {s.id && rewardStoreIds.has(s.id) && (
-                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
-                      🎁 리워드 수령 가능
-                    </span>
+        {!loading && !error && list.length > 0 && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4">
+            {list.map((s) => (
+              <button
+                key={s.kakao_place_id}
+                onClick={() => onSelectStore(s)}
+                className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
+              >
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-2xl">
+                  {s.image_url ? (
+                    <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
+                  ) : (
+                    emojiFor(s.categories)
                   )}
                 </div>
-                <p className="text-sm text-slate-500">
-                  {(s.categories || [s.category_hint?.split(" > ").pop()].filter(Boolean)).join(", ")}
-                  {" · 스탬프 "}
-                  {(s.id && stampsByStore[s.id]) ?? 0}개
-                </p>
-                {s.keywords.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {s.keywords.map((k) => (
-                      <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                        #{k}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-semibold text-slate-900">{s.name}</h2>
+                    {s.distanceKm != null && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
+                        📍 {formatDistance(s.distanceKm)}
                       </span>
-                    ))}
+                    )}
+                    {s.id && rewardStoreIds.has(s.id) && (
+                      <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
+                        🎁 리워드 수령 가능
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
-              <span className="text-slate-300">›</span>
-            </button>
-          ))}
+                  <p className="text-sm text-slate-500">
+                    {(s.categories || [s.category_hint?.split(" > ").pop()].filter(Boolean)).join(", ")}
+                    {" · 스탬프 "}
+                    {(s.id && stampsByStore[s.id]) ?? 0}개
+                  </p>
+                  {s.keywords.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {s.keywords.map((k) => (
+                        <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                          #{k}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span className="text-slate-300">›</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

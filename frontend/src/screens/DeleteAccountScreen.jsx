@@ -20,7 +20,7 @@ export default function DeleteAccountScreen({ user, onBack, onDeleted }) {
   }
 
   return (
-    <div className="pb-4">
+    <div className="pb-4 lg:mx-auto lg:max-w-xl">
       <header className="flex items-center gap-3 px-5 pt-6 pb-4">
         <button onClick={onBack} className="text-2xl text-slate-400">
           ‹

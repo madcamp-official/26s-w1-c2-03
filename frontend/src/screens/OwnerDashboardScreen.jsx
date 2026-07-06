@@ -145,7 +145,7 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
   }
 
   return (
-    <div className="px-5 py-6">
+    <div className="px-5 py-6 lg:max-w-md">
       <h2 className="mb-1 text-lg font-semibold text-slate-900">매장 인증 신청</h2>
       <p className="mb-4 text-xs text-slate-400">
         매장은 손님 화면에 이미 노출되고 있어요. 사업자등록정보로 내 매장임을 인증하면

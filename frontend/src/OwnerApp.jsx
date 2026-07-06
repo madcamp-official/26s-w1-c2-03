@@ -53,7 +53,8 @@ export default function OwnerApp({ user, onExit }) {
       : "사장님 모드"
 
   return (
-    <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
+    <div className="min-h-[100dvh] bg-white md:flex md:items-center md:justify-center md:bg-slate-100 md:py-8">
+    <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-white md:h-[92vh] md:max-w-2xl md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:shadow-xl lg:max-w-4xl">
       <header className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
         <button onClick={handleBack} className="text-2xl text-slate-400">
           ‹
@@ -105,7 +106,7 @@ export default function OwnerApp({ user, onExit }) {
         ) : (
           <div className="px-5 py-6">
             <h2 className="mb-3 text-sm font-semibold text-slate-500">내 매장 ({stores.length})</h2>
-            <div className="space-y-2">
+            <div className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {stores.map((s) => {
                 const badge = STATUS_BADGE[s.status] || STATUS_BADGE.approved
                 return (
@@ -140,6 +141,7 @@ export default function OwnerApp({ user, onExit }) {
           </div>
         )}
       </main>
+    </div>
     </div>
   )
 }
