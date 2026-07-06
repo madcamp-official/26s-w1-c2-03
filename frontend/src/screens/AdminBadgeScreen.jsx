@@ -115,12 +115,13 @@ export default function AdminBadgeScreen() {
   }
 
   return (
-    <div className="mx-auto max-w-[560px] px-5 py-8">
+    <div className="mx-auto max-w-[560px] px-5 py-8 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
       <h1 className="mb-1 text-2xl font-bold text-slate-900">🛠 관리자 — 뱃지 관리</h1>
       <p className="mb-6 text-sm text-slate-500">
         조건(키워드 또는 카테고리 × 방문 횟수)을 여러 개 걸면, 손님은 그 조건을 전부 만족해야 뱃지를 얻어요.
       </p>
 
+      <div className="lg:max-w-xl">
       {/* 기본 정보 */}
       <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <h2 className="mb-3 font-semibold text-slate-900">기본 정보</h2>
@@ -274,11 +275,12 @@ export default function AdminBadgeScreen() {
       >
         {submitting ? "생성 중..." : "뱃지 생성"}
       </button>
+      </div>
 
       {/* 만들어진 뱃지 목록 */}
       <section className="mt-8">
         <h2 className="mb-3 font-semibold text-slate-900">등록된 뱃지 ({badgeList?.length ?? 0})</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {badgeList?.map((b) => (
             <div key={b.id} className="rounded-xl border border-slate-100 bg-white p-3 text-center shadow-sm">
               {b.image_url ? (

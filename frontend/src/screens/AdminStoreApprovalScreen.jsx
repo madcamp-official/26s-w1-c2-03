@@ -35,7 +35,7 @@ export default function AdminStoreApprovalScreen() {
   }
 
   return (
-    <div className="mx-auto max-w-[560px] px-5 py-8 lg:max-w-4xl">
+    <div className="mx-auto max-w-[560px] px-5 py-8 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
       <h1 className="mb-1 text-2xl font-bold text-slate-900">🏪 관리자 — 매장 인증 승인</h1>
       <p className="mb-6 text-sm text-slate-500">
         매장은 이미 손님 화면에 노출되고 있어요. 여기서 승인하면 체크인 승인·리워드 설정 같은 운영 권한이
@@ -51,7 +51,7 @@ export default function AdminStoreApprovalScreen() {
           승인 대기 중인 매장이 없어요.
         </p>
       ) : (
-        <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
+        <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 xl:grid-cols-3">
           {stores.map((s) => (
             <div key={s.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
               <div className="flex items-start gap-3">
