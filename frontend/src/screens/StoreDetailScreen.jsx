@@ -21,6 +21,7 @@ function emojiFor(categories) {
 export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectProfile }) {
   const [ranking, setRanking] = useState(null)
   const [photos, setPhotos] = useState(null)
+  const [selectedPhoto, setSelectedPhoto] = useState(null) // 크게 보기용으로 고른 사진
 
   useEffect(() => {
     if (!store) return
@@ -145,13 +146,38 @@ export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectPr
         ) : (
           <div className="grid grid-cols-3 gap-1.5">
             {photos.map((p, i) => (
-              <div key={i} className="aspect-square overflow-hidden rounded-xl bg-slate-100">
+              <button
+                key={i}
+                onClick={() => setSelectedPhoto(p)}
+                className="aspect-square overflow-hidden rounded-xl bg-slate-100"
+              >
                 <img src={p.photo_url} alt={p.purpose || "인증 사진"} className="h-full w-full object-cover" />
-              </div>
+              </button>
             ))}
           </div>
         )}
       </div>
+
+      {/* 사진 크게 보기 — 바깥 탭하면 닫힘 */}
+      {selectedPhoto && (
+        <div
+          onClick={() => setSelectedPhoto(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+        >
+          <button
+            onClick={() => setSelectedPhoto(null)}
+            className="absolute top-6 right-5 text-3xl text-white"
+          >
+            ✕
+          </button>
+          <img
+            src={selectedPhoto.photo_url}
+            alt={selectedPhoto.purpose || "인증 사진"}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-2xl object-contain"
+          />
+        </div>
+      )}
     </div>
   )
 }
