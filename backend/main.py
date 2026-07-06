@@ -23,6 +23,7 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 CHECKIN_BUCKET = "checkin-photos"
 BADGE_BUCKET = "badge-images"
 STORE_THUMBNAIL_BUCKET = "store-thumbnails"
+PROFILE_BUCKET = "profile-images"
 
 app = FastAPI(title="맛짱(Matzzang) API")
 
@@ -337,6 +338,66 @@ def login(payload: UserLogin):
 
 
 # ---------------------------------------------------------------------
+# 닉네임 / 프로필 (온보딩 + 마이페이지 설정 공용)
+# ---------------------------------------------------------------------
+
+@app.get("/users/check-nickname")
+def check_nickname(nickname: str, exclude_user_id: Optional[str] = None):
+    db = require_supabase()
+    name = nickname.strip()
+    result = safe_execute(db.table("users").select("id").eq("nickname", name), "닉네임 확인 실패")
+    taken = any(u["id"] != exclude_user_id for u in result.data)
+    return {"available": not taken}
+
+
+@app.patch("/users/{user_id}/profile")
+async def update_profile(
+    user_id: str,
+    nickname: str = Form(...),
+    image: Optional[UploadFile] = File(None),
+):
+    nickname = nickname.strip()
+    if not nickname:
+        raise HTTPException(status_code=422, detail="닉네임을 입력해주세요.")
+    if len(nickname) > 20:
+        raise HTTPException(status_code=422, detail="닉네임은 20자 이내로 입력해주세요.")
+
+    db = require_supabase()
+
+    # 중복 확인 (본인 제외)
+    dup_check = safe_execute(db.table("users").select("id").eq("nickname", nickname), "닉네임 확인 실패")
+    if any(u["id"] != user_id for u in dup_check.data):
+        raise HTTPException(status_code=409, detail="이미 사용 중인 닉네임이에요.")
+
+    update_row = {"nickname": nickname}
+
+    if image is not None:
+        contents = await image.read()
+        extension = (image.filename or "jpg").split(".")[-1]
+        storage_path = f"{user_id}.{extension}"
+        try:
+            db.storage.from_(PROFILE_BUCKET).upload(
+                storage_path,
+                contents,
+                {"content-type": image.content_type or "image/jpeg", "upsert": "true"},
+            )
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"프로필 사진 업로드 실패: {e}")
+
+        public_url_result = db.storage.from_(PROFILE_BUCKET).get_public_url(storage_path)
+        update_row["profile_image_url"] = (
+            public_url_result
+            if isinstance(public_url_result, str)
+            else public_url_result.get("publicUrl") or public_url_result.get("public_url")
+        )
+
+    result = safe_execute(db.table("users").update(update_row).eq("id", user_id), "프로필 수정 실패")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    return result.data[0]
+
+
+# ---------------------------------------------------------------------
 # 카카오 로그인 (Supabase 내장 기능 대신 직접 구현 — 이메일 동의항목 요청 안 함)
 # ---------------------------------------------------------------------
 
@@ -394,10 +455,10 @@ async def kakao_login(payload: KakaoLoginRequest):
     # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
     existing = db.table("users").select("*").eq("kakao_id", kakao_id).execute()
     if existing.data:
-        return existing.data[0]
+        return {**existing.data[0], "is_new": False}
 
     result = db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}).execute()
-    return result.data[0]
+    return {**result.data[0], "is_new": True}
 
 
 # ---------------------------------------------------------------------
@@ -449,10 +510,10 @@ async def google_login(payload: GoogleLoginRequest):
     # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
     existing = db.table("users").select("*").eq("google_id", google_id).execute()
     if existing.data:
-        return existing.data[0]
+        return {**existing.data[0], "is_new": False}
 
     result = db.table("users").insert({"google_id": google_id, "nickname": nickname}).execute()
-    return result.data[0]
+    return {**result.data[0], "is_new": True}
 
 
 # ---------------------------------------------------------------------

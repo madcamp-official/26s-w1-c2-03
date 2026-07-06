@@ -5,6 +5,7 @@ import StoreDetailScreen from "./screens/StoreDetailScreen"
 import CheckinScreen from "./screens/CheckinScreen"
 import MyPageScreen from "./screens/MyPageScreen"
 import UserProfileScreen from "./screens/UserProfileScreen"
+import NicknameSetupScreen from "./screens/NicknameSetupScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
 import { loginWithKakao, loginWithGoogle } from "./lib/api"
@@ -16,6 +17,7 @@ function loadUser() {
 
 export default function CustomerApp({ onGoOwner }) {
   const [user, setUser] = useState(loadUser)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [authError, setAuthError] = useState(null)
   const [authLoading, setAuthLoading] = useState(false) // 카카오/구글 로그인 공용 로딩 상태
   const handledAuthCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
@@ -67,7 +69,10 @@ export default function CustomerApp({ onGoOwner }) {
       setAuthLoading(true)
       const login = state === "google" ? loginWithGoogle : loginWithKakao
       login({ code, redirectUri: window.location.origin })
-        .then((u) => saveUser(u))
+        .then((u) => {
+          saveUser(u)
+          if (u.is_new) setNeedsOnboarding(true)
+        })
         .catch((err) => setAuthError(err.message))
         .finally(() => {
           setAuthLoading(false)
@@ -171,6 +176,15 @@ export default function CustomerApp({ onGoOwner }) {
         >
           {authLoading ? "로그인 처리 중..." : "🔍 구글로 시작하기"}
         </button>
+      </div>
+    )
+  }
+
+  // 방금 소셜로 처음 가입한 유저 — 닉네임/프로필 사진 설정 먼저
+  if (needsOnboarding) {
+    return (
+      <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
+        <NicknameSetupScreen user={user} onDone={(updatedUser) => { saveUser(updatedUser); setNeedsOnboarding(false) }} />
       </div>
     )
   }

@@ -72,6 +72,30 @@ export function loginWithGoogle({ code, redirectUri }) {
   })
 }
 
+// 닉네임 중복확인 (excludeUserId를 넘기면 본인 닉네임은 중복으로 안 침)
+export function checkNickname(nickname, excludeUserId) {
+  const params = new URLSearchParams({ nickname })
+  if (excludeUserId) params.set("exclude_user_id", excludeUserId)
+  return requestJSON(`/users/check-nickname?${params.toString()}`)
+}
+
+// 프로필 수정 (닉네임 필수, 사진은 선택 — 온보딩/마이페이지 설정 공용)
+export async function updateProfile({ userId, nickname, imageFile }) {
+  const formData = new FormData()
+  formData.append("nickname", nickname)
+  if (imageFile) formData.append("image", imageFile)
+
+  const res = await fetch(`${API_BASE_URL}/users/${userId}/profile`, {
+    method: "PATCH",
+    body: formData,
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail.detail || `요청 실패: ${res.status}`)
+  }
+  return res.json()
+}
+
 export function createCheckin({ userId, storeId, purpose, photoFile, photoConsent }) {
   const formData = new FormData()
   formData.append("user_id", userId)
