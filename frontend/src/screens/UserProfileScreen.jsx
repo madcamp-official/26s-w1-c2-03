@@ -19,7 +19,7 @@ export default function UserProfileScreen({ profileUser, onBack }) {
   const earnedBadges = (badges || []).filter((b) => b.earned)
 
   return (
-    <div className="pb-4">
+    <div className="pb-4 lg:mx-auto lg:max-w-3xl">
       <header className="flex items-center gap-3 px-5 pt-6 pb-4">
         <button onClick={onBack} className="text-2xl text-slate-400">
           ‹
@@ -46,7 +46,7 @@ export default function UserProfileScreen({ profileUser, onBack }) {
           ) : earnedBadges.length === 0 ? (
             <p className="text-sm text-slate-400">아직 획득한 뱃지가 없어요</p>
           ) : (
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-8">
               {earnedBadges.map((b) => (
                 <div key={b.id} className="flex flex-col items-center gap-1 rounded-2xl bg-amber-50 p-3">
                   {b.image_url ? (

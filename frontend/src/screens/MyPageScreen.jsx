@@ -56,7 +56,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
   const totalStamps = checkins?.reduce((sum, c) => sum + (c.stamp_count ?? 1), 0) ?? 0
 
   return (
-    <div className="pb-4">
+    <div className="pb-4 lg:mx-auto lg:max-w-3xl">
       <header className="px-5 pt-6 pb-4">
         <h1 className="text-2xl font-bold text-slate-900">내 정복 지도 🏆</h1>
       </header>
@@ -93,7 +93,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
           ) : badges.length === 0 ? (
             <p className="text-sm text-slate-400">아직 등록된 뱃지가 없어요</p>
           ) : (
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-8">
               {badges.map((b) => (
                 <div
                   key={b.id}
@@ -144,7 +144,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
               아직 방문 인증한 곳이 없어요. 지도에서 맛집을 찾아 방문해보세요!
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0">
               {visitedStores.map((s) => (
                 <button
                   key={s.id}
