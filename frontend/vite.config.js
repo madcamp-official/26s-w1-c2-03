@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    allowedHosts: ['cupid-browse-poet.ngrok-free.dev'], // 👈 이 줄이 추가되었습니다!
+    allowedHosts: ['cupid-browse-poet.ngrok-free.dev', 'matzzang.for20wgh0514.madcamp-kaist.org'],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
