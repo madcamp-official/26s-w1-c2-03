@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getStores, getCategoryOptions } from "../lib/api"
+import { getStampsByStore } from "../lib/stamps"
 
 const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
 
@@ -40,7 +41,7 @@ function loadKakaoMaps() {
 }
 
 function makePinHtml(store) {
-  const visited = (store.myStamps ?? 0) > 0
+  const visited = (store.myStampCount ?? 0) > 0
   const bg = visited ? "#f59e0b" : "#ffffff"
   const border = visited ? "3px solid #ffffff" : "2px solid #cbd5e1"
   const opacity = visited ? "1" : "0.9"
@@ -60,7 +61,7 @@ function makeUserHtml() {
   return `<div style="width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 5px rgba(59,130,246,.25)"></div>`
 }
 
-export default function MapScreen({ onSelectStore, myLocation, locating, onLocate }) {
+export default function MapScreen({ onSelectStore, myLocation, locating, onLocate, user }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const storeOverlaysRef = useRef([])
@@ -75,6 +76,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
 
   const [stores, setStores] = useState([])
   const [loadError, setLoadError] = useState(null)
+  const [stampsByStore, setStampsByStore] = useState({}) // storeId -> 내 스탬프 개수
 
   useEffect(() => {
     getStores()
@@ -83,13 +85,22 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   }, [])
 
   useEffect(() => {
+    if (!user) return
+    getStampsByStore(user.id)
+      .then(setStampsByStore)
+      .catch(() => setStampsByStore({}))
+  }, [user?.id])
+
+  useEffect(() => {
     getCategoryOptions()
       .then((opts) => setCategoryOptions(opts.map((o) => o.name)))
       .catch(() => setCategoryOptions([]))
   }, [])
 
   const catChips = ["전체", ...categoryOptions]
-  const visibleStores = stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
+  const visibleStores = stores
+    .filter((s) => cat === "전체" || (s.categories || []).includes(cat))
+    .map((s) => ({ ...s, myStampCount: stampsByStore[s.id] ?? 0 }))
 
   useEffect(() => {
     let cancelled = false
@@ -118,7 +129,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
         <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.categories)} ${store.name}</p>
         <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
-          ${(store.categories || []).join(", ")}${(store.myStamps ?? 0) > 0 ? ` · 방문 ${store.myStamps}회 ✅` : " · 아직 안 감"}
+          ${(store.categories || []).join(", ")}${(store.myStampCount ?? 0) > 0 ? ` · 스탬프 ${store.myStampCount}개 ✅` : " · 아직 안 감"}
         </p>
         ${
           myLocation

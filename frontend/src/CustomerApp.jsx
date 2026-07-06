@@ -224,7 +224,7 @@ export default function CustomerApp({ onGoOwner }) {
           <HomeScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
         )}
         {screen === "map" && (
-          <MapScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} />
+          <MapScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
         )}
         {screen === "detail" && (
           <StoreDetailScreen
