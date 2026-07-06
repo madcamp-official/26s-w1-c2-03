@@ -198,7 +198,7 @@ def get_store_ranking(store_id: str):
     db = require_supabase()
     result = safe_execute(
         db.table("checkins")
-        .select("user_id, users(nickname)")
+        .select("user_id, users(nickname, profile_image_url)")
         .eq("store_id", store_id)
         .eq("status", "approved"),
         "방문 랭킹 조회 실패",
@@ -206,12 +206,22 @@ def get_store_ranking(store_id: str):
 
     counts: dict[str, int] = {}
     nicknames: dict[str, str] = {}
+    profile_images: dict[str, str] = {}
     for c in result.data:
         user_id = c["user_id"]
         counts[user_id] = counts.get(user_id, 0) + 1
         nicknames[user_id] = (c.get("users") or {}).get("nickname")
+        profile_images[user_id] = (c.get("users") or {}).get("profile_image_url")
 
-    ranking = [{"user_id": uid, "nickname": nicknames.get(uid), "count": count} for uid, count in counts.items()]
+    ranking = [
+        {
+            "user_id": uid,
+            "nickname": nicknames.get(uid),
+            "profile_image_url": profile_images.get(uid),
+            "count": count,
+        }
+        for uid, count in counts.items()
+    ]
     ranking.sort(key=lambda r: r["count"], reverse=True)
     return ranking
 

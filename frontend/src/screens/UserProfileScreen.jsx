@@ -29,7 +29,13 @@ export default function UserProfileScreen({ profileUser, onBack }) {
 
       <div className="px-5">
         <div className="flex items-center gap-4 rounded-2xl bg-slate-900 p-5 text-white">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-2xl">😋</div>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-500 text-2xl">
+            {profileUser.profile_image_url ? (
+              <img src={profileUser.profile_image_url} alt={profileUser.nickname} className="h-full w-full object-cover" />
+            ) : (
+              "😋"
+            )}
+          </div>
           <p className="text-lg font-bold">{profileUser.nickname}</p>
         </div>
 
