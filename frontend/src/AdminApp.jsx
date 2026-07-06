@@ -15,7 +15,7 @@ export default function AdminApp() {
 
   return (
     <div>
-      <div className="mx-auto flex max-w-[560px] gap-2 px-5 pt-6">
+      <div className="mx-auto flex max-w-[560px] gap-2 px-5 pt-6 lg:max-w-4xl">
         {TABS.map((t) => (
           <button
             key={t.key}
