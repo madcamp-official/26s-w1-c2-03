@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getStores, getCategoryOptions, getAvailableRewards } from "../lib/api"
+import { getStampsByStore } from "../lib/stamps"
 import { storeMatchesQuery } from "../lib/fuzzySearch"
 
 // 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
@@ -28,6 +29,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
   const [categoryOptions, setCategoryOptions] = useState([]) // ["카페", "한식", ...]
   const [rewardStoreIds, setRewardStoreIds] = useState(new Set()) // 내가 리워드 수령 가능한 매장 id들
+  const [stampsByStore, setStampsByStore] = useState({}) // storeId -> 내 스탬프 개수
 
   const [sido, setSido] = useState(null)
   const [gu, setGu] = useState(null)
@@ -58,6 +60,14 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     getAvailableRewards(user.id)
       .then((rewards) => setRewardStoreIds(new Set(rewards.map((r) => r.store_id))))
       .catch(() => setRewardStoreIds(new Set()))
+  }, [user?.id])
+
+  // 매장별 내 스탬프 개수 — 리스트에 "방문 N회" 대신 실제 스탬프 개수를 보여주기 위함
+  useEffect(() => {
+    if (!user) return
+    getStampsByStore(user.id)
+      .then(setStampsByStore)
+      .catch(() => setStampsByStore({}))
   }, [user?.id])
 
   const catChips = ["전체", ...categoryOptions]
@@ -242,7 +252,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                   )}
                 </div>
                 <p className="text-sm text-slate-500">
-                  {(s.categories || []).join(", ")} · 방문 {s.myStamps ?? 0}회
+                  {(s.categories || []).join(", ")} · 스탬프 {stampsByStore[s.id] ?? 0}개
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {(s.keywords || []).map((k) => (

@@ -146,15 +146,17 @@ users ──< reviews >── stores
 
 ## 3. 보조 테이블
 
-### user_rewards (리워드 지급 기록 — 사장님이 인증 수락 화면에서 지급 처리하면 생김)
+### user_rewards (리워드 수령 요청/지급 기록 — 손님이 "수령하기"를 누르면 pending으로 생기고, 사장님이 승인하면 approved)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | uuid | 고유 번호 |
 | user_id | uuid | 누가 (→ users) |
 | reward_id | uuid | 어떤 리워드 (→ rewards) |
-| claimed_at | timestamptz | 지급된 시각 |
+| status | text | pending(대기) / approved(승인) — 거절 시에는 행 자체를 삭제해서 재요청 가능하게 함 |
+| claimed_at | timestamptz | 요청한 시각 |
+| reviewed_at | timestamptz | 사장님이 승인한 시각 |
 
-> user_id + reward_id는 유니크 — 같은 리워드를 같은 유저에게 두 번 지급 못 하게 막음.
+> user_id + reward_id는 유니크 — 같은 리워드를 같은 유저가 중복 요청 못 하게 막음.
 
 ### reviews (자체 리뷰 — 리뷰왕 칭호용)
 | 컬럼 | 타입 | 설명 |
@@ -316,21 +318,24 @@ create table rewards (
   created_at timestamptz default now()
 );
 
--- 8. 리워드 지급 기록 (사장님이 인증 수락 화면에서 지급 처리)
+-- 8. 리워드 수령 요청/지급 기록 (손님이 "수령하기" 누르면 pending 생성, 사장님이 승인하면 approved)
 create table user_rewards (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references users(id),
   reward_id uuid references rewards(id) on delete cascade,
+  status text not null default 'pending',  -- pending / approved
   claimed_at timestamptz default now(),
+  reviewed_at timestamptz,
   unique (user_id, reward_id)
 );
 
--- ⚠️ [아직 실행 안 함 — 리워드 기능 쓰려면 지금 Supabase SQL Editor에서 실행]
--- 기존 rewards/user_rewards는 옛날 설계(title/type/stamp_goal 등)라 실제로 쓴 적 없는 빈 테이블임 —
--- 안전하게 지우고 위 7·8번 새 스키마로 다시 만듦.
-drop table if exists user_rewards;
-drop table if exists rewards;
--- (위에서 이미 정의한 create table rewards(...), create table user_rewards(...) 를 여기서 다시 실행)
+-- (기존 rewards/user_rewards 옛날 설계를 지우고 위 7·8번 새 스키마로 다시 만든 마이그레이션은 2026-07-06에 이미 완료됨)
+
+-- ⚠️ [아직 실행 안 함 — 리워드 수령 요청/승인 방식으로 바꾸려면 지금 Supabase SQL Editor에서 실행]
+-- 기존 user_rewards는 "사장님이 바로 지급" 방식으로 쓰던 테스트 데이터라 지우고 새로 시작
+delete from user_rewards;
+alter table user_rewards add column if not exists status text not null default 'pending';
+alter table user_rewards add column if not exists reviewed_at timestamptz;
 
 -- 9. 자체 리뷰
 create table reviews (

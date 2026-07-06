@@ -1,6 +1,6 @@
 // 매장 상세 — 정보 + 내 스탬프 + 인증 버튼 + 방문 랭킹 + 리워드
 import { useEffect, useState } from "react"
-import { getStoreRanking, getStorePhotos, getStoreRewards, getCheckins } from "../lib/api"
+import { getStoreRanking, getStorePhotos, getStoreRewards, getCheckins, getUserRewardClaims, claimReward } from "../lib/api"
 
 const CATEGORY_EMOJI = {
   카페: "☕",
@@ -29,6 +29,8 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
   const [selectedPhoto, setSelectedPhoto] = useState(null) // 크게 보기용으로 고른 사진
   const [myStamps, setMyStamps] = useState(0)
   const [rewards, setRewards] = useState(null)
+  const [claimsByReward, setClaimsByReward] = useState({}) // reward_id -> 'pending' | 'approved'
+  const [claimingId, setClaimingId] = useState(null) // 수령하기 요청 보내는 중인 reward_id
 
   useEffect(() => {
     if (!store) return
@@ -54,6 +56,26 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
       .then((checkins) => setMyStamps(checkins.reduce((sum, c) => sum + (c.stamp_count ?? 1), 0)))
       .catch(() => setMyStamps(0))
   }, [store?.id, user?.id])
+
+  // 내가 요청했거나 이미 받은 리워드 상태 — "수령하기" 버튼을 뭘로 보여줄지 결정
+  useEffect(() => {
+    if (!user) return
+    getUserRewardClaims(user.id)
+      .then((claims) => setClaimsByReward(Object.fromEntries(claims.map((c) => [c.reward_id, c.status]))))
+      .catch(() => setClaimsByReward({}))
+  }, [user?.id])
+
+  const handleClaim = async (rewardId) => {
+    setClaimingId(rewardId)
+    try {
+      await claimReward({ rewardId, userId: user.id })
+      setClaimsByReward((prev) => ({ ...prev, [rewardId]: "pending" }))
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setClaimingId(null)
+    }
+  }
 
   if (!store) return null
 
@@ -114,21 +136,39 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
             <p className="text-sm text-slate-400">아직 등록된 리워드가 없어요</p>
           ) : (
             <div className="space-y-1.5">
-              {rewards.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
-                >
-                  <p className="text-sm text-amber-800">
-                    <b>스탬프 {r.stamp_threshold}개</b> → {rewardLabel(r)}
-                  </p>
-                  {myStamps >= r.stamp_threshold && (
-                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
-                      달성!
-                    </span>
-                  )}
-                </div>
-              ))}
+              {rewards.map((r) => {
+                const achieved = myStamps >= r.stamp_threshold
+                const claimStatus = claimsByReward[r.id]
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+                  >
+                    <p className="text-sm text-amber-800">
+                      <b>스탬프 {r.stamp_threshold}개</b> → {rewardLabel(r)}
+                    </p>
+                    {achieved && claimStatus === "approved" && (
+                      <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-semibold text-white">
+                        받음 ✅
+                      </span>
+                    )}
+                    {achieved && claimStatus === "pending" && (
+                      <span className="rounded-full bg-slate-300 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        요청됨
+                      </span>
+                    )}
+                    {achieved && !claimStatus && (
+                      <button
+                        onClick={() => handleClaim(r.id)}
+                        disabled={claimingId === r.id}
+                        className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white active:bg-amber-600 disabled:opacity-60"
+                      >
+                        {claimingId === r.id ? "요청 중..." : "수령하기"}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>

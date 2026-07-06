@@ -67,12 +67,12 @@ def delete_reward(reward_id: str):
 
 @router.get("/users/{user_id}/reward-claims")
 def get_user_reward_claims(user_id: str):
-    # 사장님 인증 수락 화면에서, 이 유저에게 어떤 리워드를 이미 줬는지 확인할 때 사용
+    # 손님 화면에서 "이 리워드 이미 요청했는지/받았는지" 확인할 때 사용 (reward_id별 상태)
     db = require_supabase()
     result = safe_execute(
-        db.table("user_rewards").select("reward_id").eq("user_id", user_id), "지급 기록 조회 실패"
+        db.table("user_rewards").select("reward_id, status").eq("user_id", user_id), "지급 기록 조회 실패"
     )
-    return [r["reward_id"] for r in result.data]
+    return [{"reward_id": r["reward_id"], "status": r["status"]} for r in result.data]
 
 
 @router.get("/users/{user_id}/available-rewards")
@@ -132,16 +132,85 @@ class RewardClaim(BaseModel):
 
 @router.post("/rewards/{reward_id}/claim")
 def claim_reward(reward_id: str, payload: RewardClaim):
-    # 사장님이 인증 수락 화면에서 "지급하기"를 누르면 호출 — 같은 유저에게 같은 리워드는 한 번만 지급됨
+    # 손님이 "수령하기" 버튼을 누르면 호출 — 사장님 승인 전까지는 'pending' 상태로 대기
     db = require_supabase()
     existing = safe_execute(
         db.table("user_rewards").select("id").eq("user_id", payload.user_id).eq("reward_id", reward_id),
-        "지급 여부 확인 실패",
+        "요청 여부 확인 실패",
     )
     if existing.data:
-        raise HTTPException(status_code=409, detail="이미 지급된 리워드예요.")
+        raise HTTPException(status_code=409, detail="이미 요청했거나 받은 리워드예요.")
     result = safe_execute(
-        db.table("user_rewards").insert({"user_id": payload.user_id, "reward_id": reward_id}),
-        "리워드 지급 실패",
+        db.table("user_rewards").insert(
+            {"user_id": payload.user_id, "reward_id": reward_id, "status": "pending"}
+        ),
+        "리워드 요청 실패",
     )
     return result.data[0]
+
+
+@router.get("/stores/{store_id}/reward-requests")
+def get_store_reward_requests(store_id: str, status: Optional[str] = None):
+    """사장님 화면 — 이 매장의 리워드 목록에 걸린 수령 요청들 (닉네임 포함)."""
+    db = require_supabase()
+    rewards_result = safe_execute(
+        db.table("rewards").select("id").eq("store_id", store_id), "리워드 목록 조회 실패"
+    )
+    reward_ids = [r["id"] for r in rewards_result.data]
+    if not reward_ids:
+        return []
+
+    query = (
+        db.table("user_rewards")
+        .select("*, rewards(target_type, target_name, reward_kind, discount_percent, stamp_threshold), users(nickname)")
+        .in_("reward_id", reward_ids)
+    )
+    if status:
+        query = query.eq("status", status)
+    result = safe_execute(query.order("claimed_at"), "리워드 요청 조회 실패")
+
+    requests = []
+    for r in result.data:
+        reward = r.get("rewards") or {}
+        requests.append({
+            "id": r["id"],
+            "user_id": r["user_id"],
+            "nickname": (r.get("users") or {}).get("nickname"),
+            "reward_id": r["reward_id"],
+            "status": r["status"],
+            "requested_at": r.get("claimed_at"),
+            "target_type": reward.get("target_type"),
+            "target_name": reward.get("target_name"),
+            "reward_kind": reward.get("reward_kind"),
+            "discount_percent": reward.get("discount_percent"),
+            "stamp_threshold": reward.get("stamp_threshold"),
+        })
+    return requests
+
+
+class RewardRequestReview(BaseModel):
+    action: str  # 'approve' | 'reject'
+
+
+@router.patch("/user-rewards/{user_reward_id}")
+def review_reward_request(user_reward_id: str, payload: RewardRequestReview):
+    db = require_supabase()
+    if payload.action == "approve":
+        result = safe_execute(
+            db.table("user_rewards")
+            .update({"status": "approved", "reviewed_at": "now()"})
+            .eq("id", user_reward_id),
+            "리워드 승인 실패",
+        )
+        if not result.data:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다.")
+        return result.data[0]
+    elif payload.action == "reject":
+        result = safe_execute(
+            db.table("user_rewards").delete().eq("id", user_reward_id), "리워드 거절 실패"
+        )
+        if not result.data:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다.")
+        return {"deleted": True}
+    else:
+        raise HTTPException(status_code=422, detail="action은 approve 또는 reject여야 합니다.")
