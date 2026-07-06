@@ -211,8 +211,12 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
               onClick={() => onSelectStore(s)}
               className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-amber-50 text-2xl">
-                {emojiFor(s.categories)}
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-2xl">
+                {s.image_url ? (
+                  <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
+                ) : (
+                  emojiFor(s.categories)
+                )}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">

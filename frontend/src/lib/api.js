@@ -72,17 +72,18 @@ export function loginWithGoogle({ code, redirectUri }) {
   })
 }
 
-export function createCheckin({ userId, storeId, purpose, photoFile }) {
+export function createCheckin({ userId, storeId, purpose, photoFile, photoConsent }) {
   const formData = new FormData()
   formData.append("user_id", userId)
   formData.append("store_id", storeId)
   if (purpose) formData.append("purpose", purpose)
+  formData.append("photo_consent", photoConsent ? "true" : "false")
   formData.append("file", photoFile)
   return requestForm("/checkins", formData)
 }
 
 // 매장 등록 (사장님 대시보드용) — 주소는 백엔드에서 카카오 API로 좌표/시도/구군 자동 변환됨
-export function createStore({ ownerId, name, address, categories, keywords }) {
+export function createStore({ ownerId, name, address, categories, keywords, imageUrl }) {
   return requestJSON("/stores", {
     method: "POST",
     body: JSON.stringify({
@@ -91,13 +92,31 @@ export function createStore({ ownerId, name, address, categories, keywords }) {
       address,
       categories,
       keywords,
+      image_url: imageUrl,
     }),
   })
+}
+
+// 매장 썸네일 직접 업로드 (등록 직후 호출 — 장소검색으로 자동 채운 이미지가 있어도 이걸로 덮어씀)
+export function uploadStoreThumbnail(storeId, imageBlob) {
+  const formData = new FormData()
+  formData.append("image", imageBlob, "store.png")
+  return requestForm(`/stores/${storeId}/thumbnail`, formData)
 }
 
 // 상호명으로 카카오 장소 검색 (사장님이 직접 주소 안 치고 검색해서 고르는 방식)
 export function searchPlace(query) {
   return requestJSON(`/kakao/search-place?query=${encodeURIComponent(query)}`)
+}
+
+// 검색 결과로 고른 장소의 카카오맵 대표 이미지 (place_url 필요)
+export function getPlaceImage(placeUrl) {
+  return requestJSON(`/kakao/place-image?place_url=${encodeURIComponent(placeUrl)}`)
+}
+
+// 매장 상세 화면의 "손님이 보낸 사진" 갤러리 (승인 + 공개 동의된 것만)
+export function getStorePhotos(storeId) {
+  return requestJSON(`/stores/${storeId}/photos`)
 }
 
 // 카테고리 선택지 (매장 등록 폼 / 뱃지 조건 폼에서 공용으로 사용)

@@ -1,7 +1,7 @@
 // 매장 상세 — 정보 + 내 스탬프 + 인증 버튼 + 방문 랭킹 + 리워드
 // 리워드는 아직 백엔드에 없어서, 데이터가 있을 때만 섹션을 보여줌 (없으면 숨김, 크래시 방지)
 import { useEffect, useState } from "react"
-import { getStoreRanking } from "../lib/api"
+import { getStoreRanking, getStorePhotos } from "../lib/api"
 
 const CATEGORY_EMOJI = {
   카페: "☕",
@@ -20,6 +20,7 @@ function emojiFor(categories) {
 
 export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectProfile }) {
   const [ranking, setRanking] = useState(null)
+  const [photos, setPhotos] = useState(null)
 
   useEffect(() => {
     if (!store) return
@@ -27,6 +28,10 @@ export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectPr
     getStoreRanking(store.id)
       .then(setRanking)
       .catch(() => setRanking([]))
+    setPhotos(null)
+    getStorePhotos(store.id)
+      .then(setPhotos)
+      .catch(() => setPhotos([]))
   }, [store?.id])
 
   if (!store) return null
@@ -45,9 +50,17 @@ export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectPr
       </header>
 
       <div className="px-5">
-        <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl">
-          {emojiFor(categories)}
-        </div>
+        {store.image_url ? (
+          <img
+            src={store.image_url}
+            alt={store.name}
+            className="h-48 w-full rounded-3xl object-cover"
+          />
+        ) : (
+          <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl">
+            {emojiFor(categories)}
+          </div>
+        )}
 
         <h2 className="mt-4 text-2xl font-bold text-slate-900">{store.name}</h2>
         <p className="text-slate-500">
@@ -117,6 +130,24 @@ export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectPr
                 </span>
                 <span className="text-sm text-slate-400">{v.count}회</span>
               </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 손님이 보낸 사진 — 승인된 인증 사진 중 공개에 동의한 것만 */}
+      <div className="px-5 pt-6">
+        <h3 className="mb-2 font-semibold text-slate-900">손님이 보낸 사진</h3>
+        {photos === null ? (
+          <p className="text-sm text-slate-400">불러오는 중...</p>
+        ) : photos.length === 0 ? (
+          <p className="text-sm text-slate-400">아직 공개된 인증 사진이 없어요</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {photos.map((p, i) => (
+              <div key={i} className="aspect-square overflow-hidden rounded-xl bg-slate-100">
+                <img src={p.photo_url} alt={p.purpose || "인증 사진"} className="h-full w-full object-cover" />
+              </div>
             ))}
           </div>
         )}

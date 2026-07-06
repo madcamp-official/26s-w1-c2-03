@@ -7,6 +7,7 @@ export default function CheckinScreen({ store, user, onBack, onDone }) {
   const [purpose, setPurpose] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+  const [photoConsent, setPhotoConsent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState(null)
@@ -39,6 +40,7 @@ export default function CheckinScreen({ store, user, onBack, onDone }) {
         storeId: store.id,
         purpose,
         photoFile,
+        photoConsent,
       })
       setSubmitted(true)
     } catch (err) {
@@ -125,6 +127,17 @@ export default function CheckinScreen({ store, user, onBack, onDone }) {
             </button>
           ))}
         </div>
+
+        {/* 매장 페이지 공개 동의 — 기본은 비공개, 손님이 직접 선택해야 매장 상세의 "손님이 보낸 사진"에 노출됨 */}
+        <label className="mt-6 flex items-start gap-2.5 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={photoConsent}
+            onChange={(e) => setPhotoConsent(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>이 인증 사진을 매장 페이지의 "손님이 보낸 사진"에 공개하는 것에 동의해요 (선택)</span>
+        </label>
 
         {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
       </div>

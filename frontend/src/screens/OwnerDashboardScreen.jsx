@@ -1,6 +1,14 @@
-import { useEffect, useState } from "react"
-import { createStore, getCategoryOptions, getKeywordOptions, searchPlace } from "../lib/api"
+import { useEffect, useRef, useState } from "react"
+import {
+  createStore,
+  getCategoryOptions,
+  getKeywordOptions,
+  searchPlace,
+  getPlaceImage,
+  uploadStoreThumbnail,
+} from "../lib/api"
 import OptionChips from "../components/OptionChips"
+import ImageCropper from "../components/ImageCropper"
 
 const MAX_KEYWORDS = 3
 
@@ -16,6 +24,13 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
   const [placeQuery, setPlaceQuery] = useState("")
   const [placeResults, setPlaceResults] = useState(null)
   const [searching, setSearching] = useState(false)
+
+  // 썸네일: 장소검색으로 자동 채운 것(autoImageUrl) 또는 사장님이 직접 올린 것(croppedBlob) 중 하나
+  const [autoImageUrl, setAutoImageUrl] = useState(null)
+  const [pickedFile, setPickedFile] = useState(null) // 크롭 대기 중인 원본 파일
+  const [croppedBlob, setCroppedBlob] = useState(null)
+  const [croppedPreviewUrl, setCroppedPreviewUrl] = useState(null)
+  const fileInputRef = useRef(null)
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
@@ -49,6 +64,29 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
     setAddress(place.address || "")
     setPlaceResults(null)
     setPlaceQuery("")
+
+    // 카카오맵에 있는 대표 사진을 자동으로 채워봄 (사장님이 직접 올리면 이건 무시됨)
+    setAutoImageUrl(null)
+    if (place.place_url) {
+      getPlaceImage(place.place_url)
+        .then((res) => setAutoImageUrl(res.image_url))
+        .catch(() => setAutoImageUrl(null))
+    }
+  }
+
+  const handleFilePick = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPickedFile(file)
+    setCroppedBlob(null)
+    if (croppedPreviewUrl) URL.revokeObjectURL(croppedPreviewUrl)
+    setCroppedPreviewUrl(null)
+  }
+
+  const handleCropped = (blob) => {
+    setCroppedBlob(blob)
+    setPickedFile(null)
+    setCroppedPreviewUrl(URL.createObjectURL(blob))
   }
 
   const toggleCategory = (c) => {
@@ -64,8 +102,18 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
     setSubmitting(true)
     setError("")
     try {
-      const store = await createStore({ ownerId, name, address, categories, keywords })
-      onRegistered(store)
+      // 직접 올린 사진이 없으면 장소검색으로 자동으로 찾은 사진을 등록과 동시에 넣음
+      const store = await createStore({
+        ownerId,
+        name,
+        address,
+        categories,
+        keywords,
+        imageUrl: croppedBlob ? undefined : autoImageUrl || undefined,
+      })
+      // 직접 올린 사진이 있으면 등록 직후 업로드해서 덮어씀
+      const finalStore = croppedBlob ? await uploadStoreThumbnail(store.id, croppedBlob) : store
+      onRegistered(finalStore)
     } catch (e) {
       setError(e.message || "매장 등록에 실패했어요")
       setSubmitting(false)
@@ -138,6 +186,41 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
           className="mb-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-amber-400"
         />
         <p className="mb-4 text-xs text-slate-400">주소를 입력하면 서버가 자동으로 지도 좌표로 변환해요</p>
+
+        <label className="mb-2 block text-sm font-medium text-slate-600">매장 사진 (선택)</label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFilePick}
+          className="hidden"
+        />
+        {pickedFile ? (
+          <div className="mb-4">
+            <ImageCropper file={pickedFile} onCancel={() => setPickedFile(null)} onCropped={handleCropped} />
+          </div>
+        ) : (
+          <div className="mb-4 flex items-center gap-3">
+            {croppedPreviewUrl || autoImageUrl ? (
+              <img
+                src={croppedPreviewUrl || autoImageUrl}
+                alt="매장 사진 미리보기"
+                className="h-16 w-16 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-slate-50 text-2xl">🏪</div>
+            )}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600"
+            >
+              {croppedPreviewUrl ? "다른 사진 선택" : "사진 올리기"}
+            </button>
+            {!croppedPreviewUrl && autoImageUrl && (
+              <p className="text-xs text-slate-400">매장 검색으로 자동으로 찾은 사진이에요</p>
+            )}
+          </div>
+        )}
 
         <label className="mb-2 block text-sm font-medium text-slate-600">카테고리 (중복 선택 가능)</label>
         {categoryOptions.length === 0 ? (

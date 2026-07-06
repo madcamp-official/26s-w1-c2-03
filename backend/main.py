@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 import json
 import httpx
@@ -21,6 +22,7 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 CHECKIN_BUCKET = "checkin-photos"
 BADGE_BUCKET = "badge-images"
+STORE_THUMBNAIL_BUCKET = "store-thumbnails"
 
 app = FastAPI(title="맛짱(Matzzang) API")
 
@@ -80,6 +82,7 @@ class StoreCreate(BaseModel):
     address: str
     categories: Optional[list[str]] = None
     keywords: Optional[list[str]] = None
+    image_url: Optional[str] = None  # 장소검색으로 자동 등록할 때 카카오맵 대표 이미지를 여기로 넘김
 
 MAX_STORE_KEYWORDS = 3
 
@@ -137,6 +140,7 @@ async def create_store(payload: StoreCreate):
         "address": payload.address,
         "categories": payload.categories,
         "keywords": payload.keywords,
+        "image_url": payload.image_url,
         "lat": geo["lat"],
         "lng": geo["lng"],
         "sido": geo["sido"],
@@ -144,6 +148,36 @@ async def create_store(payload: StoreCreate):
     }
 
     result = db.table("stores").insert(row).execute()
+    return result.data[0]
+
+
+@app.post("/stores/{store_id}/thumbnail")
+async def upload_store_thumbnail(store_id: str, image: UploadFile = File(...)):
+    # 사장님이 매장 등록 후(또는 나중에) 직접 썸네일을 올릴 때 사용 — 장소검색 자동 이미지를 덮어씀
+    db = require_supabase()
+    contents = await image.read()
+    extension = (image.filename or "jpg").split(".")[-1]
+    storage_path = f"{store_id}/{uuid.uuid4()}.{extension}"
+
+    try:
+        db.storage.from_(STORE_THUMBNAIL_BUCKET).upload(
+            storage_path, contents, {"content-type": image.content_type or "image/jpeg"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"매장 썸네일 업로드 실패: {e}")
+
+    public_url_result = db.storage.from_(STORE_THUMBNAIL_BUCKET).get_public_url(storage_path)
+    image_url = (
+        public_url_result
+        if isinstance(public_url_result, str)
+        else public_url_result.get("publicUrl") or public_url_result.get("public_url")
+    )
+
+    result = safe_execute(
+        db.table("stores").update({"image_url": image_url}).eq("id", store_id), "매장 썸네일 저장 실패"
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")
     return result.data[0]
 
 
@@ -176,10 +210,36 @@ async def search_place(query: str):
             "address": doc.get("road_address_name") or doc.get("address_name"),
             "category_hint": doc.get("category_name"),  # 참고용 — 우리 카테고리 칩과 자동 매칭 안 됨, 사장님이 직접 선택
             "phone": doc.get("phone") or None,
+            "place_url": doc.get("place_url"),  # 카카오맵 상세 페이지 — 대표 이미지 자동으로 가져올 때 사용
             "lat": float(doc["y"]),
             "lng": float(doc["x"]),
         })
     return results
+
+
+@app.get("/kakao/place-image")
+async def get_place_image(place_url: str):
+    """
+    카카오맵 장소 상세 페이지에서 대표 이미지(og:image) 하나만 가져옴.
+    별도 이미지 API가 없어서, 그 페이지에 이미 박혀 있는 og:image 메타태그를 그대로 읽어옴
+    (사장님이 매장 검색으로 자동 등록할 때, 등록 안 해도 대표 사진 하나는 채워주기 위함).
+    """
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=5) as client:
+            res = await client.get(place_url, headers={"User-Agent": "Mozilla/5.0"})
+    except httpx.HTTPError:
+        return {"image_url": None}
+
+    if res.status_code != 200:
+        return {"image_url": None}
+
+    match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', res.text)
+    if not match:
+        return {"image_url": None}
+    image_url = match.group(1)
+    if image_url.startswith("//"):  # 프로토콜 생략 URL은 https로 고정
+        image_url = f"https:{image_url}"
+    return {"image_url": image_url}
 
 
 # ---------------------------------------------------------------------
@@ -440,11 +500,36 @@ def get_store_ranking(store_id: str):
     return ranking
 
 
+@app.get("/stores/{store_id}/photos")
+def get_store_photos(store_id: str):
+    # 매장 상세 화면의 "손님이 보낸 사진" 갤러리 — 승인됐고, 손님이 공개에 동의한 체크인 사진만 최신순으로
+    db = require_supabase()
+    result = safe_execute(
+        db.table("checkins")
+        .select("photo_url, purpose, created_at, users(nickname)")
+        .eq("store_id", store_id)
+        .eq("status", "approved")
+        .eq("photo_consent", True)
+        .order("created_at", desc=True),
+        "매장 사진 조회 실패",
+    )
+    return [
+        {
+            "photo_url": c["photo_url"],
+            "purpose": c["purpose"],
+            "created_at": c["created_at"],
+            "nickname": (c.get("users") or {}).get("nickname"),
+        }
+        for c in result.data
+    ]
+
+
 @app.post("/checkins")
 async def create_checkin(
     user_id: str = Form(...),
     store_id: str = Form(...),
     purpose: Optional[str] = Form(None),
+    photo_consent: bool = Form(False),
     file: UploadFile = File(...),
 ):
     db = require_supabase()
@@ -475,6 +560,7 @@ async def create_checkin(
         "photo_url": photo_url,
         "purpose": purpose,
         "status": "pending",
+        "photo_consent": photo_consent,
     }
     result = db.table("checkins").insert(row).execute()
     return result.data[0]
