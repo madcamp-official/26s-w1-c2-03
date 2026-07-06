@@ -17,7 +17,7 @@ function emojiFor(category) {
 }
 
 // 마이 — 프로필 + 실제 뱃지 + 실제 방문 기록 (정복 지도)
-export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendPhoto }) {
+export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendPhoto, onEditProfile }) {
   const [badges, setBadges] = useState(null)
   const [checkins, setCheckins] = useState(null)
   const [sortBy, setSortBy] = useState("recent") // recent | frequent
@@ -63,13 +63,25 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
       <div className="px-5">
         {/* 프로필 */}
         <div className="flex items-center gap-4 rounded-2xl bg-slate-900 p-5 text-white">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-2xl">
-            😋
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-500 text-2xl">
+            {user.profile_image_url ? (
+              <img src={user.profile_image_url} alt={user.nickname} className="h-full w-full object-cover" />
+            ) : (
+              "😋"
+            )}
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-lg font-bold">{user.nickname}</p>
             <p className="text-sm text-slate-300">총 스탬프 {totalStamps}개</p>
           </div>
+          {onEditProfile && (
+            <button
+              onClick={onEditProfile}
+              className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white"
+            >
+              프로필 수정
+            </button>
+          )}
         </div>
 
         {/* 뱃지 (관리자 페이지에서 만든 실제 뱃지 + 실제 획득 여부) */}

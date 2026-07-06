@@ -6,6 +6,7 @@ import CheckinScreen from "./screens/CheckinScreen"
 import MyPageScreen from "./screens/MyPageScreen"
 import UserProfileScreen from "./screens/UserProfileScreen"
 import NicknameSetupScreen from "./screens/NicknameSetupScreen"
+import EditProfileScreen from "./screens/EditProfileScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
 import { loginWithKakao, loginWithGoogle } from "./lib/api"
@@ -223,6 +224,14 @@ export default function CustomerApp({ onGoOwner }) {
             onLogout={logout}
             onEnterOwnerMode={() => onGoOwner(user)}
             onSendPhoto={openCheckinDirect}
+            onEditProfile={() => setScreen("editProfile")}
+          />
+        )}
+        {screen === "editProfile" && (
+          <EditProfileScreen
+            user={user}
+            onBack={() => setScreen("my")}
+            onDone={(updatedUser) => { saveUser(updatedUser); setScreen("my") }}
           />
         )}
       </main>
