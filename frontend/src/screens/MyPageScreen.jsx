@@ -17,7 +17,7 @@ function emojiFor(category) {
 }
 
 // 마이 — 프로필 + 실제 뱃지 + 실제 방문 기록 (정복 지도)
-export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendPhoto, onEditProfile, onDeleteAccount }) {
+export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenStore, onEditProfile, onDeleteAccount }) {
   const [badges, setBadges] = useState(null)
   const [checkins, setCheckins] = useState(null)
   const [sortBy, setSortBy] = useState("recent") // recent | frequent
@@ -148,7 +148,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
               {visitedStores.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => onSendPhoto(s)}
+                  onClick={() => onOpenStore(s)}
                   className="flex w-full items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-left"
                 >
                   <span className="text-xl">{emojiFor((s.categories || [])[0])}</span>

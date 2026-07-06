@@ -26,8 +26,7 @@ export default function CustomerApp({ onGoOwner }) {
 
   const [screen, setScreen] = useState("home")
   const [selectedStore, setSelectedStore] = useState(null)
-  const [prevScreen, setPrevScreen] = useState("home") // 매장 상세에서 뒤로가기 시 돌아갈 곳(홈/지도)
-  const [checkinReturnTo, setCheckinReturnTo] = useState("detail") // 인증 화면에서 뒤로가기 시 돌아갈 곳
+  const [prevScreen, setPrevScreen] = useState("home") // 매장 상세에서 뒤로가기 시 돌아갈 곳(홈/지도/마이)
   const [selectedProfileUser, setSelectedProfileUser] = useState(null) // 방문 랭킹에서 클릭한 유저
 
   const [myLocation, setMyLocation] = useState(null)
@@ -172,17 +171,16 @@ export default function CustomerApp({ onGoOwner }) {
     setScreen("detail")
   }
 
-  // 매장 상세를 거쳐서 인증하러 갈 때
+  // 매장 상세를 거쳐서 인증하러 갈 때 (체크인 화면은 항상 상세 화면을 거쳐서만 들어옴)
   const openCheckinFromDetail = () => {
-    setCheckinReturnTo("detail")
     setScreen("checkin")
   }
 
-  // 마이페이지의 "내가 방문한 곳"에서 바로 인증하러 갈 때 (상세 화면 건너뜀)
-  const openCheckinDirect = (store) => {
+  // 마이페이지의 "내가 방문한 곳"에서 매장 상세로 이동할 때 — 이미 우리 DB 매장이라 resolve 필요 없음
+  const openStoreFromMy = (store) => {
+    setPrevScreen("my")
     setSelectedStore(store)
-    setCheckinReturnTo("my")
-    setScreen("checkin")
+    setScreen("detail")
   }
 
   // 매장 상세의 방문 랭킹에서 다른 유저 프로필(획득 뱃지) 보러 갈 때
@@ -274,8 +272,8 @@ export default function CustomerApp({ onGoOwner }) {
           <CheckinScreen
             store={selectedStore}
             user={user}
-            onBack={() => setScreen(checkinReturnTo)}
-            onDone={() => setScreen(checkinReturnTo === "my" ? "my" : "home")}
+            onBack={() => setScreen("detail")}
+            onDone={() => setScreen("home")}
           />
         )}
         {screen === "my" && (
@@ -283,7 +281,7 @@ export default function CustomerApp({ onGoOwner }) {
             user={user}
             onLogout={logout}
             onEnterOwnerMode={() => onGoOwner(user)}
-            onSendPhoto={openCheckinDirect}
+            onOpenStore={openStoreFromMy}
             onEditProfile={() => setScreen("editProfile")}
             onDeleteAccount={() => setScreen("deleteAccount")}
           />
