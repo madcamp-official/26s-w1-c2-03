@@ -82,7 +82,7 @@ export default function OwnerCheckinsScreen({ storeId }) {
           </p>
         )}
 
-        <div className="space-y-2">
+        <div className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
           {rewardRequests?.map((r) => (
             <div
               key={r.id}
@@ -127,7 +127,7 @@ export default function OwnerCheckinsScreen({ storeId }) {
         </p>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
         {checkins?.map((c) => (
           <div key={c.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <div className="flex items-center gap-3">

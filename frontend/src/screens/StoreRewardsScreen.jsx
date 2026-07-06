@@ -71,7 +71,7 @@ export default function StoreRewardsScreen({ storeId }) {
         스탬프를 일정 개수 모으면 손님이 받을 수 있는 혜택을 정해요.
       </p>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm lg:max-w-md">
         <label className="mb-1 block text-sm font-medium text-slate-600">스탬프 몇 개 모으면?</label>
         <input
           type="number"
@@ -156,7 +156,7 @@ export default function StoreRewardsScreen({ storeId }) {
             아직 등록된 리워드가 없어요
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0">
             {rewards.map((r) => (
               <div
                 key={r.id}
