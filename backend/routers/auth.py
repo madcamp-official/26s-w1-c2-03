@@ -117,8 +117,12 @@ async def update_profile(
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str):
     db = require_supabase()
-    # checkins.user_id는 users(id)를 참조하므로(cascade 없음) 먼저 지워야 유저 삭제가 FK 위반 없이 됨
+    # checkins/user_badges/user_rewards/reviews 모두 user_id가 users(id)를 참조하는데 cascade가 없어서,
+    # 먼저 지워야 유저 삭제가 FK 위반 없이 됨 (예: 리워드를 받은 적 있으면 user_rewards 때문에 막힘)
     safe_execute(db.table("checkins").delete().eq("user_id", user_id), "방문 기록 삭제 실패")
+    safe_execute(db.table("user_badges").delete().eq("user_id", user_id), "뱃지 기록 삭제 실패")
+    safe_execute(db.table("user_rewards").delete().eq("user_id", user_id), "리워드 기록 삭제 실패")
+    safe_execute(db.table("reviews").delete().eq("user_id", user_id), "리뷰 삭제 실패")
     result = safe_execute(db.table("users").delete().eq("id", user_id), "회원 탈퇴 실패")
     if not result.data:
         raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
