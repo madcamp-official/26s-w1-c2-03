@@ -10,7 +10,7 @@ import EditProfileScreen from "./screens/EditProfileScreen"
 import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
-import { loginWithKakao, loginWithGoogle, loginWithNaver } from "./lib/api"
+import { loginWithKakao, loginWithGoogle, loginWithNaver, getStores, getCheckins } from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
@@ -32,6 +32,8 @@ export default function CustomerApp({ onGoOwner }) {
 
   const [myLocation, setMyLocation] = useState(null)
   const [locating, setLocating] = useState(false)
+
+  const [pendingRequestCount, setPendingRequestCount] = useState(0) // 내 매장(들)에 온 미확인 인증 요청 개수 — 마이 탭 뱃지용
 
   const saveUser = (u) => {
     setUser(u)
@@ -83,6 +85,25 @@ export default function CustomerApp({ onGoOwner }) {
         })
     }
   }, [])
+
+  // 이 계정이 매장을 등록해둔 사장님이면, 그 매장(들)에 온 미확인(대기 중) 인증 요청 개수를 세서
+  // 마이 탭에 카카오톡 알림처럼 빨간 뱃지로 보여줌
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    getStores({ ownerId: user.id })
+      .then((myStores) =>
+        Promise.all(myStores.map((s) => getCheckins({ storeId: s.id, status: "pending" })))
+      )
+      .then((lists) => {
+        if (cancelled) return
+        setPendingRequestCount(lists.reduce((sum, l) => sum + l.length, 0))
+      })
+      .catch(() => setPendingRequestCount(0))
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, screen])
 
   const startKakaoLogin = () => {
     setAuthError(null)
@@ -268,7 +289,7 @@ export default function CustomerApp({ onGoOwner }) {
         )}
       </main>
 
-      <BottomNav screen={screen} setScreen={setScreen} />
+      <BottomNav screen={screen} setScreen={setScreen} myBadgeCount={pendingRequestCount} />
     </div>
   )
 }
