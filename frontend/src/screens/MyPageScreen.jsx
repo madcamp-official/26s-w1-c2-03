@@ -52,7 +52,8 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
     return list
   })()
 
-  const totalStamps = checkins?.length ?? 0
+  // 총 스탬프 = 체크인 개수가 아니라 각 체크인에 적립된 스탬프 개수의 합 (사장님이 수락할 때 개수를 정할 수 있어서)
+  const totalStamps = checkins?.reduce((sum, c) => sum + (c.stamp_count ?? 1), 0) ?? 0
 
   return (
     <div className="pb-4">

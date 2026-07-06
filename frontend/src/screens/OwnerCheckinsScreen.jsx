@@ -6,6 +6,7 @@ export default function OwnerCheckinsScreen({ storeId }) {
   const [checkins, setCheckins] = useState(null) // null = 로딩 중
   const [error, setError] = useState("")
   const [reviewingId, setReviewingId] = useState(null) // 지금 수락/거절 처리 중인 요청
+  const [stampCounts, setStampCounts] = useState({}) // checkinId -> 수락 시 줄 스탬프 개수 (기본 1)
 
   const load = () => {
     setError("")
@@ -16,10 +17,15 @@ export default function OwnerCheckinsScreen({ storeId }) {
 
   useEffect(load, [storeId])
 
+  const getStampCount = (checkinId) => stampCounts[checkinId] ?? 1
+  const changeStampCount = (checkinId, delta) => {
+    setStampCounts((prev) => ({ ...prev, [checkinId]: Math.max(1, (prev[checkinId] ?? 1) + delta) }))
+  }
+
   const review = async (checkinId, status) => {
     setReviewingId(checkinId)
     try {
-      await reviewCheckin({ checkinId, status })
+      await reviewCheckin({ checkinId, status, stampCount: getStampCount(checkinId) })
       // 처리된 건 대기 목록에서 바로 제거 (재조회 없이 즉시 반영)
       setCheckins((prev) => prev.filter((c) => c.id !== checkinId))
     } catch (e) {
@@ -68,7 +74,28 @@ export default function OwnerCheckinsScreen({ storeId }) {
               </div>
             </div>
 
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+              <span className="text-sm text-slate-500">수락 시 지급할 스탬프</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => changeStampCount(c.id, -1)}
+                  disabled={reviewingId === c.id}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-600 disabled:opacity-50"
+                >
+                  −
+                </button>
+                <span className="w-4 text-center font-semibold text-slate-900">{getStampCount(c.id)}</span>
+                <button
+                  onClick={() => changeStampCount(c.id, 1)}
+                  disabled={reviewingId === c.id}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-600 disabled:opacity-50"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-2 flex gap-2">
               <button
                 onClick={() => review(c.id, "rejected")}
                 disabled={reviewingId === c.id}
@@ -81,7 +108,7 @@ export default function OwnerCheckinsScreen({ storeId }) {
                 disabled={reviewingId === c.id}
                 className="flex-1 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {reviewingId === c.id ? "처리 중..." : "수락"}
+                {reviewingId === c.id ? "처리 중..." : `스탬프 ${getStampCount(c.id)}개 주고 수락`}
               </button>
             </div>
           </div>

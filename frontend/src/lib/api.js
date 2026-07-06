@@ -190,11 +190,11 @@ export function getCheckins({ storeId, userId, status } = {}) {
   return requestJSON(`/checkins${query}`)
 }
 
-// 체크인 승인/거절
-export function reviewCheckin({ checkinId, status }) {
+// 체크인 승인/거절 (승인 시 stampCount로 스탬프 개수 지정, 기본 1)
+export function reviewCheckin({ checkinId, status, stampCount }) {
   return requestJSON(`/checkins/${checkinId}`, {
     method: "PATCH",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, stamp_count: stampCount ?? 1 }),
   })
 }
 

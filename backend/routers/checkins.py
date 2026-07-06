@@ -74,17 +74,24 @@ async def create_checkin(
 
 class CheckinReview(BaseModel):
     status: str  # 'approved' | 'rejected'
+    stamp_count: int = 1  # 수락할 때만 의미 있음 — 사장님이 +/-로 정한 스탬프 개수 (기본 1)
 
 
 @router.patch("/checkins/{checkin_id}")
 def review_checkin(checkin_id: str, payload: CheckinReview):
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(status_code=422, detail="status는 approved 또는 rejected 여야 합니다.")
+    if payload.stamp_count < 1:
+        raise HTTPException(status_code=422, detail="스탬프 개수는 1개 이상이어야 합니다.")
+
+    update_row = {"status": payload.status, "reviewed_at": "now()"}
+    if payload.status == "approved":
+        update_row["stamp_count"] = payload.stamp_count
 
     db = require_supabase()
     result = (
         db.table("checkins")
-        .update({"status": payload.status, "reviewed_at": "now()"})
+        .update(update_row)
         .eq("id", checkin_id)
         .execute()
     )
