@@ -98,13 +98,13 @@ function OptionSection({ title, description, load, create, remove }) {
 // 관리자 페이지 — 매장 등록 폼/뱃지 조건 폼에서 쓰는 카테고리·키워드 선택지 관리
 export default function AdminOptionsScreen() {
   return (
-    <div className="mx-auto max-w-[560px] px-5 py-8">
+    <div className="mx-auto max-w-[560px] px-5 py-8 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
       <h1 className="mb-1 text-2xl font-bold text-slate-900">🛠 관리자 — 카테고리·키워드 관리</h1>
       <p className="mb-6 text-sm text-slate-500">
         여기서 추가한 선택지가 매장 등록 폼과 뱃지 조건 폼에 그대로 나타나요.
       </p>
 
-      <div className="space-y-4">
+      <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
         <OptionSection
           title="카테고리"
           description="매장 등록 시 중복 선택 가능한 카테고리 목록"
