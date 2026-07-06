@@ -201,7 +201,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         )}
 
         {!loading && !error && list.length > 0 && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4 2xl:grid-cols-4">
             {list.map((s) => (
               <button
                 key={s.kakao_place_id}
@@ -216,15 +216,15 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-semibold text-slate-900">{s.name}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="min-w-0 flex-1 truncate font-semibold text-slate-900">{s.name}</h2>
                     {s.distanceKm != null && (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
+                      <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
                         📍 {formatDistance(s.distanceKm)}
                       </span>
                     )}
                     {s.id && rewardStoreIds.has(s.id) && (
-                      <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
+                      <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
                         🎁 리워드 수령 가능
                       </span>
                     )}

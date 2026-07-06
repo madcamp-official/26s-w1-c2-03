@@ -258,7 +258,7 @@ export default function CustomerApp({ onGoOwner }) {
   // 폰: 430px 카드 그대로 / 태블릿 세로(md): 하단 탭바 유지하되 카드 폭만 넉넉하게 / lg 이상: 왼쪽 SideNav + 넓은 본문
   return (
     <div className="min-h-[100dvh] bg-white md:flex md:items-center md:justify-center md:bg-slate-100 md:py-8">
-      <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-white md:h-[92vh] md:max-w-2xl md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:shadow-xl lg:h-[85vh] lg:max-w-5xl lg:flex-row">
+      <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-white md:h-[92vh] md:max-w-2xl md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:shadow-xl lg:h-[90vh] lg:max-w-6xl lg:flex-row xl:max-w-7xl 2xl:max-w-[1600px]">
         <SideNav screen={screen} setScreen={setScreen} myBadgeCount={pendingRequestCount} />
 
         <div className="flex min-h-0 flex-1 flex-col">
