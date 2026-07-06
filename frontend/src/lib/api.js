@@ -187,6 +187,47 @@ export function getStoreRanking(storeId) {
   return requestJSON(`/stores/${storeId}/ranking`)
 }
 
+// 매장별 리워드 기준 목록 (매장 상세 화면 표시 + 사장님 설정 화면 공용)
+export function getStoreRewards(storeId) {
+  return requestJSON(`/stores/${storeId}/rewards`)
+}
+
+// 리워드 등록 (사장님 매장 설정 화면)
+export function createReward({ storeId, stampThreshold, targetType, targetName, rewardKind, discountPercent }) {
+  return requestJSON(`/stores/${storeId}/rewards`, {
+    method: "POST",
+    body: JSON.stringify({
+      stamp_threshold: stampThreshold,
+      target_type: targetType,
+      target_name: targetName,
+      reward_kind: rewardKind,
+      discount_percent: discountPercent,
+    }),
+  })
+}
+
+export function deleteReward(rewardId) {
+  return requestDelete(`/rewards/${rewardId}`)
+}
+
+// 유저가 스탬프 기준을 달성했지만 아직 못 받은 리워드 (홈 화면 "리워드 수령 가능" 표시용)
+export function getAvailableRewards(userId) {
+  return requestJSON(`/users/${userId}/available-rewards`)
+}
+
+// 유저가 이미 받은 리워드 id 목록 (사장님 인증 수락 화면에서 중복 지급 방지용으로 사용)
+export function getUserRewardClaims(userId) {
+  return requestJSON(`/users/${userId}/reward-claims`)
+}
+
+// 리워드 지급 처리 (사장님 인증 수락 화면의 "지급하기")
+export function claimReward({ rewardId, userId }) {
+  return requestJSON(`/rewards/${rewardId}/claim`, {
+    method: "POST",
+    body: JSON.stringify({ user_id: userId }),
+  })
+}
+
 // 체크인 목록 조회 (사장님 대시보드의 승인 대기 목록 / 마이페이지의 내 방문 기록에서 사용)
 export function getCheckins({ storeId, userId, status } = {}) {
   const params = new URLSearchParams()

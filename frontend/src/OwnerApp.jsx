@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import OwnerDashboardScreen from "./screens/OwnerDashboardScreen"
 import OwnerCheckinsScreen from "./screens/OwnerCheckinsScreen"
+import StoreRewardsScreen from "./screens/StoreRewardsScreen"
 import { getStores } from "./lib/api"
 
 // 사장님 모드 — 카카오로 로그인한 계정이면 누구나 진입 가능.
@@ -11,6 +12,7 @@ import { getStores } from "./lib/api"
 export default function OwnerApp({ user, onExit }) {
   const [stores, setStores] = useState(null) // null = 로딩 중
   const [selectedStore, setSelectedStore] = useState(null)
+  const [storeTab, setStoreTab] = useState("checkins") // checkins | rewards — 매장 선택했을 때만 씀
   const [showRegisterForm, setShowRegisterForm] = useState(false)
 
   const loadStores = () => {
@@ -30,8 +32,10 @@ export default function OwnerApp({ user, onExit }) {
   // 뒤로가기: 하위 화면부터 한 단계씩 (등록폼 → 목록 → 아예 종료)
   const handleBack = () => {
     if (showRegisterForm) setShowRegisterForm(false)
-    else if (selectedStore) setSelectedStore(null)
-    else onExit()
+    else if (selectedStore) {
+      setSelectedStore(null)
+      setStoreTab("checkins")
+    } else onExit()
   }
 
   const headerSubtitle = showRegisterForm
@@ -56,7 +60,27 @@ export default function OwnerApp({ user, onExit }) {
         {showRegisterForm ? (
           <OwnerDashboardScreen ownerId={user.id} onRegistered={handleRegistered} />
         ) : selectedStore ? (
-          <OwnerCheckinsScreen storeId={selectedStore.id} />
+          <div>
+            <div className="flex gap-2 px-5 pt-4">
+              <button
+                onClick={() => setStoreTab("checkins")}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${storeTab === "checkins" ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"}`}
+              >
+                인증 요청
+              </button>
+              <button
+                onClick={() => setStoreTab("rewards")}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${storeTab === "rewards" ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"}`}
+              >
+                매장 설정
+              </button>
+            </div>
+            {storeTab === "checkins" ? (
+              <OwnerCheckinsScreen storeId={selectedStore.id} />
+            ) : (
+              <StoreRewardsScreen storeId={selectedStore.id} />
+            )}
+          </div>
         ) : stores === null ? (
           <p className="px-5 py-10 text-center text-sm text-slate-400">불러오는 중...</p>
         ) : stores.length === 0 ? (
