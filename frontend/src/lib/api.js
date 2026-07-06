@@ -96,6 +96,11 @@ export async function updateProfile({ userId, nickname, imageFile }) {
   return res.json()
 }
 
+// 회원탈퇴 — 방문 기록도 서버에서 함께 삭제됨, 되돌릴 수 없음
+export function deleteUser(userId) {
+  return requestDelete(`/users/${userId}`)
+}
+
 export function createCheckin({ userId, storeId, purpose, photoFile, photoConsent }) {
   const formData = new FormData()
   formData.append("user_id", userId)
@@ -107,7 +112,8 @@ export function createCheckin({ userId, storeId, purpose, photoFile, photoConsen
 }
 
 // 매장 등록 (사장님 대시보드용) — 주소는 백엔드에서 카카오 API로 좌표/시도/구군 자동 변환됨
-export function createStore({ ownerId, name, address, categories, keywords, imageUrl }) {
+// kakaoPlaceId: 매장 검색으로 골랐을 때만 있음 — 서버가 이걸로 실제 동일 장소인지 정확히 중복 판별함
+export function createStore({ ownerId, name, address, categories, keywords, imageUrl, kakaoPlaceId }) {
   return requestJSON("/stores", {
     method: "POST",
     body: JSON.stringify({
@@ -117,6 +123,7 @@ export function createStore({ ownerId, name, address, categories, keywords, imag
       categories,
       keywords,
       image_url: imageUrl,
+      kakao_place_id: kakaoPlaceId,
     }),
   })
 }

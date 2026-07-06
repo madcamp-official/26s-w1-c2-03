@@ -17,7 +17,7 @@ function emojiFor(category) {
 }
 
 // 마이 — 프로필 + 실제 뱃지 + 실제 방문 기록 (정복 지도)
-export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendPhoto, onEditProfile }) {
+export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendPhoto, onEditProfile, onDeleteAccount }) {
   const [badges, setBadges] = useState(null)
   const [checkins, setCheckins] = useState(null)
   const [sortBy, setSortBy] = useState("recent") // recent | frequent
@@ -182,6 +182,16 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onSendP
         >
           로그아웃
         </button>
+
+        {/* 회원탈퇴 — 눈에 덜 띄게, 로그아웃과 헷갈리지 않도록 아래에 작은 텍스트로 */}
+        {onDeleteAccount && (
+          <button
+            onClick={onDeleteAccount}
+            className="mt-3 w-full text-center text-xs text-slate-400 underline"
+          >
+            회원탈퇴
+          </button>
+        )}
       </div>
     </div>
   )

@@ -112,6 +112,17 @@ async def update_profile(
     return result.data[0]
 
 
+@router.delete("/users/{user_id}")
+def delete_user(user_id: str):
+    db = require_supabase()
+    # checkins.user_id는 users(id)를 참조하므로(cascade 없음) 먼저 지워야 유저 삭제가 FK 위반 없이 됨
+    safe_execute(db.table("checkins").delete().eq("user_id", user_id), "방문 기록 삭제 실패")
+    result = safe_execute(db.table("users").delete().eq("id", user_id), "회원 탈퇴 실패")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    return {"deleted": True}
+
+
 # ---------------------------------------------------------------------
 # 카카오 로그인 (Supabase 내장 기능 대신 직접 구현 — 이메일 동의항목 요청 안 함)
 # ---------------------------------------------------------------------

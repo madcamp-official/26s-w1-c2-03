@@ -43,6 +43,7 @@ users ──< reviews >── stores
 | categories | text[] | 카페 / 한식 / 일식 / 디저트 … 중복 선택 (예: {카페, 디저트}) *(사장님이 category_options 중에서 선택)* |
 | keywords | text[] | 키워드 배열, 최대 3개 (예: {분위기좋은, 조용한, 디저트맛집}) *(사장님이 keyword_options 중에서 선택)* |
 | image_url | text | 매장 썸네일 사진 주소 — 직접 등록 시 사장님이 업로드(Supabase Storage), 장소검색으로 자동 등록 시 카카오맵 대표 이미지를 자동으로 채움 |
+| kakao_place_id | text | 매장 검색으로 등록한 경우 카카오맵상 실제 장소 ID — 중복 매장 등록 판별에 사용 (직접 입력 시 null) |
 | lat | double | 위도 — 주소를 좌표로 자동 변환(카카오 API), 폼 입력 아님 |
 | lng | double | 경도 — 위와 동일 |
 | sido | text | 시/도 — 주소에서 자동 추출 |
@@ -243,6 +244,9 @@ create table checkins (
 
 -- ⚠️ [아직 실행 안 함 — 지금 Supabase SQL Editor에서 실행]
 alter table checkins add column if not exists stamp_count int default 1;
+
+-- ⚠️ [아직 실행 안 함 — 매장 중복 등록 방지(카카오 장소 ID 기반)에 필요, 지금 Supabase SQL Editor에서 실행]
+alter table stores add column if not exists kakao_place_id text;
 
 -- 5. 뱃지 정의
 create table badges (

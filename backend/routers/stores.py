@@ -32,6 +32,7 @@ class StoreCreate(BaseModel):
     categories: Optional[list[str]] = None
     keywords: Optional[list[str]] = None
     image_url: Optional[str] = None  # 장소검색으로 자동 등록할 때 카카오맵 대표 이미지를 여기로 넘김
+    kakao_place_id: Optional[str] = None  # 매장 검색으로 고른 경우, 카카오맵상 실제 장소 ID (중복 판별에 사용)
 
 
 MAX_STORE_KEYWORDS = 3
@@ -67,13 +68,34 @@ async def geocode_address(address: str) -> dict:
     return {"lat": lat, "lng": lng, "sido": sido, "gu": gu}
 
 
+def _normalize(text: str) -> str:
+    # 중복 비교용 — 공백 차이(예: "테스트1" vs "테스트 1")를 무시하기 위해 공백을 전부 제거
+    return "".join(text.split())
+
+
 @router.post("/stores")
 async def create_store(payload: StoreCreate):
     if payload.keywords and len(payload.keywords) > MAX_STORE_KEYWORDS:
         raise HTTPException(status_code=422, detail=f"키워드는 최대 {MAX_STORE_KEYWORDS}개까지 선택할 수 있어요.")
 
+    name = payload.name.strip()
+    address = payload.address.strip()
+
     db = require_supabase()
-    geo = await geocode_address(payload.address)
+
+    # 중복 등록 차단
+    # 1순위: 카카오 장소 ID가 있으면 그걸로 비교 — 카카오맵상 실제로 같은 장소인지 정확히 판별
+    # 2순위: 장소 ID가 없거나 다르면 이름·주소를 공백 무시하고 비교 (직접 입력 시 공백 표기 차이 방지)
+    existing = safe_execute(
+        db.table("stores").select("id, name, address, kakao_place_id"), "중복 매장 확인 실패"
+    )
+    for store in existing.data:
+        if payload.kakao_place_id and store.get("kakao_place_id") == payload.kakao_place_id:
+            raise HTTPException(status_code=409, detail="이미 등록된 매장이에요 (카카오맵상 동일 장소).")
+        if _normalize(store["name"]) == _normalize(name) and _normalize(store["address"]) == _normalize(address):
+            raise HTTPException(status_code=409, detail="이미 등록된 매장이에요 (같은 이름·주소).")
+
+    geo = await geocode_address(address)
 
     # owner_id는 이제 카카오로 로그인한 users.id를 그대로 씀 (별도 사장님 회원가입 없음).
     # stores.owner_id는 owners 테이블을 참조하므로, 아직 owners에 같은 id가 없으면 먼저 만들어줌
@@ -86,11 +108,12 @@ async def create_store(payload: StoreCreate):
 
     row = {
         "owner_id": payload.owner_id,
-        "name": payload.name,
-        "address": payload.address,
+        "name": name,
+        "address": address,
         "categories": payload.categories,
         "keywords": payload.keywords,
         "image_url": payload.image_url,
+        "kakao_place_id": payload.kakao_place_id,
         "lat": geo["lat"],
         "lng": geo["lng"],
         "sido": geo["sido"],

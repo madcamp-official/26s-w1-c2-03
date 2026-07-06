@@ -16,6 +16,7 @@ const MAX_KEYWORDS = 3
 export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
   const [name, setName] = useState("")
   const [address, setAddress] = useState("")
+  const [kakaoPlaceId, setKakaoPlaceId] = useState(null) // 검색으로 고른 실제 카카오 장소 ID (중복 판별용, 직접 입력 시 없음)
   const [categoryOptions, setCategoryOptions] = useState([])
   const [keywordOptions, setKeywordOptions] = useState([])
   const [categories, setCategories] = useState([])
@@ -62,6 +63,7 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
   const handlePickPlace = (place) => {
     setName(place.name || "")
     setAddress(place.address || "")
+    setKakaoPlaceId(place.kakao_place_id || null)
     setPlaceResults(null)
     setPlaceQuery("")
 
@@ -110,6 +112,7 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
         categories,
         keywords,
         imageUrl: croppedBlob ? undefined : autoImageUrl || undefined,
+        kakaoPlaceId,
       })
       // 직접 올린 사진이 있으면 등록 직후 업로드해서 덮어씀
       const finalStore = croppedBlob ? await uploadStoreThumbnail(store.id, croppedBlob) : store
@@ -173,7 +176,10 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
         <label className="mb-1 block text-sm font-medium text-slate-600">매장 이름</label>
         <input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value)
+            setKakaoPlaceId(null) // 검색으로 고른 뒤 직접 수정하면 더 이상 그 장소와 동일하다고 보장 못 함
+          }}
           placeholder="예: 성수동 감성카페"
           className="mb-4 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-amber-400"
         />
@@ -181,7 +187,10 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
         <label className="mb-1 block text-sm font-medium text-slate-600">주소</label>
         <input
           value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          onChange={(e) => {
+            setAddress(e.target.value)
+            setKakaoPlaceId(null)
+          }}
           placeholder="예: 서울 성동구 성수동 123"
           className="mb-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-amber-400"
         />

@@ -7,6 +7,7 @@ import MyPageScreen from "./screens/MyPageScreen"
 import UserProfileScreen from "./screens/UserProfileScreen"
 import NicknameSetupScreen from "./screens/NicknameSetupScreen"
 import EditProfileScreen from "./screens/EditProfileScreen"
+import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
 import { loginWithKakao, loginWithGoogle } from "./lib/api"
@@ -225,6 +226,7 @@ export default function CustomerApp({ onGoOwner }) {
             onEnterOwnerMode={() => onGoOwner(user)}
             onSendPhoto={openCheckinDirect}
             onEditProfile={() => setScreen("editProfile")}
+            onDeleteAccount={() => setScreen("deleteAccount")}
           />
         )}
         {screen === "editProfile" && (
@@ -233,6 +235,9 @@ export default function CustomerApp({ onGoOwner }) {
             onBack={() => setScreen("my")}
             onDone={(updatedUser) => { saveUser(updatedUser); setScreen("my") }}
           />
+        )}
+        {screen === "deleteAccount" && (
+          <DeleteAccountScreen user={user} onBack={() => setScreen("my")} onDeleted={logout} />
         )}
       </main>
 
