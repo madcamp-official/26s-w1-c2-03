@@ -9,6 +9,7 @@ import NicknameSetupScreen from "./screens/NicknameSetupScreen"
 import EditProfileScreen from "./screens/EditProfileScreen"
 import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
+import SideNav from "./components/SideNav"
 import { getMyLocation } from "./lib/geo"
 import { loginWithKakao, loginWithGoogle, loginWithNaver, getStores, getCheckins, resolveStore } from "./lib/api"
 
@@ -200,42 +201,45 @@ export default function CustomerApp({ onGoOwner }) {
   }
 
   // 로그인은 카카오/구글/네이버 중 하나 (아이디/비번 로그인은 더 이상 노출 안 함)
+  // md 이상(태블릿/PC)에서는 회색 배경 위에 카드 형태로 중앙 배치
   if (!user) {
     return (
-      <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col items-center justify-center bg-white px-8">
-        <img src="/app-icon.svg" alt="맛짱" className="mb-4 h-24 w-24" />
-        <h1 className="text-3xl font-bold text-slate-900">맛짱</h1>
-        <p className="mb-10 text-sm font-medium tracking-widest text-amber-500">MATZZANG</p>
+      <div className="min-h-[100dvh] bg-white md:flex md:items-center md:justify-center md:bg-slate-100 md:py-10">
+        <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col items-center justify-center bg-white px-8 md:h-auto md:max-w-md md:rounded-3xl md:border md:border-slate-200 md:py-14 md:shadow-xl">
+          <img src="/app-icon.svg" alt="맛짱" className="mb-4 h-24 w-24" />
+          <h1 className="text-3xl font-bold text-slate-900">맛짱</h1>
+          <p className="mb-10 text-sm font-medium tracking-widest text-amber-500">MATZZANG</p>
 
-        {authError && (
-          <p className="mb-4 w-full rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-500">
-            {authError}
-          </p>
-        )}
+          {authError && (
+            <p className="mb-4 w-full rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-500">
+              {authError}
+            </p>
+          )}
 
-        <button
-          onClick={startKakaoLogin}
-          disabled={authLoading}
-          className="mb-2 w-full rounded-xl bg-[#FEE500] py-3.5 text-sm font-semibold text-[#191919] shadow-sm"
-        >
-          {authLoading ? "로그인 처리 중..." : "💬 카카오로 시작하기"}
-        </button>
+          <button
+            onClick={startKakaoLogin}
+            disabled={authLoading}
+            className="mb-2 w-full rounded-xl bg-[#FEE500] py-3.5 text-sm font-semibold text-[#191919] shadow-sm"
+          >
+            {authLoading ? "로그인 처리 중..." : "💬 카카오로 시작하기"}
+          </button>
 
-        <button
-          onClick={startGoogleLogin}
-          disabled={authLoading}
-          className="mb-2 w-full rounded-xl border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-700 shadow-sm"
-        >
-          {authLoading ? "로그인 처리 중..." : "🔍 구글로 시작하기"}
-        </button>
+          <button
+            onClick={startGoogleLogin}
+            disabled={authLoading}
+            className="mb-2 w-full rounded-xl border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-700 shadow-sm"
+          >
+            {authLoading ? "로그인 처리 중..." : "🔍 구글로 시작하기"}
+          </button>
 
-        <button
-          onClick={startNaverLogin}
-          disabled={authLoading}
-          className="w-full rounded-xl bg-[#03C75A] py-3.5 text-sm font-semibold text-white shadow-sm"
-        >
-          {authLoading ? "로그인 처리 중..." : "N 네이버로 시작하기"}
-        </button>
+          <button
+            onClick={startNaverLogin}
+            disabled={authLoading}
+            className="w-full rounded-xl bg-[#03C75A] py-3.5 text-sm font-semibold text-white shadow-sm"
+          >
+            {authLoading ? "로그인 처리 중..." : "N 네이버로 시작하기"}
+          </button>
+        </div>
       </div>
     )
   }
@@ -243,64 +247,73 @@ export default function CustomerApp({ onGoOwner }) {
   // 방금 소셜로 처음 가입한 유저 — 닉네임/프로필 사진 설정 먼저
   if (needsOnboarding) {
     return (
-      <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
-        <NicknameSetupScreen user={user} onDone={(updatedUser) => { saveUser(updatedUser); setNeedsOnboarding(false) }} />
+      <div className="min-h-[100dvh] bg-white md:flex md:items-center md:justify-center md:bg-slate-100 md:py-10">
+        <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-white md:h-auto md:max-w-md md:rounded-3xl md:border md:border-slate-200 md:py-10 md:shadow-xl">
+          <NicknameSetupScreen user={user} onDone={(updatedUser) => { saveUser(updatedUser); setNeedsOnboarding(false) }} />
+        </div>
       </div>
     )
   }
 
+  // 폰: 430px 카드 그대로 / 태블릿 세로(md): 하단 탭바 유지하되 카드 폭만 넉넉하게 / lg 이상: 왼쪽 SideNav + 넓은 본문
   return (
-    <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        {screen === "home" && (
-          <HomeScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
-        )}
-        {screen === "map" && (
-          <MapScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
-        )}
-        {screen === "detail" && (
-          <StoreDetailScreen
-            store={selectedStore}
-            user={user}
-            onBack={() => setScreen(prevScreen)}
-            onCheckin={openCheckinFromDetail}
-            onSelectProfile={openProfile}
-          />
-        )}
-        {screen === "profile" && (
-          <UserProfileScreen profileUser={selectedProfileUser} onBack={() => setScreen("detail")} />
-        )}
-        {screen === "checkin" && (
-          <CheckinScreen
-            store={selectedStore}
-            user={user}
-            onBack={() => setScreen(checkinReturnTo)}
-            onDone={() => setScreen(checkinReturnTo === "my" ? "my" : "home")}
-          />
-        )}
-        {screen === "my" && (
-          <MyPageScreen
-            user={user}
-            onLogout={logout}
-            onEnterOwnerMode={() => onGoOwner(user)}
-            onSendPhoto={openCheckinDirect}
-            onEditProfile={() => setScreen("editProfile")}
-            onDeleteAccount={() => setScreen("deleteAccount")}
-          />
-        )}
-        {screen === "editProfile" && (
-          <EditProfileScreen
-            user={user}
-            onBack={() => setScreen("my")}
-            onDone={(updatedUser) => { saveUser(updatedUser); setScreen("my") }}
-          />
-        )}
-        {screen === "deleteAccount" && (
-          <DeleteAccountScreen user={user} onBack={() => setScreen("my")} onDeleted={logout} />
-        )}
-      </main>
+    <div className="min-h-[100dvh] bg-white md:flex md:items-center md:justify-center md:bg-slate-100 md:py-8">
+      <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-white md:h-[92vh] md:max-w-2xl md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:shadow-xl lg:h-[85vh] lg:max-w-5xl lg:flex-row">
+        <SideNav screen={screen} setScreen={setScreen} myBadgeCount={pendingRequestCount} />
 
-      <BottomNav screen={screen} setScreen={setScreen} myBadgeCount={pendingRequestCount} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            {screen === "home" && (
+              <HomeScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
+            )}
+            {screen === "map" && (
+              <MapScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
+            )}
+            {screen === "detail" && (
+              <StoreDetailScreen
+                store={selectedStore}
+                user={user}
+                onBack={() => setScreen(prevScreen)}
+                onCheckin={openCheckinFromDetail}
+                onSelectProfile={openProfile}
+              />
+            )}
+            {screen === "profile" && (
+              <UserProfileScreen profileUser={selectedProfileUser} onBack={() => setScreen("detail")} />
+            )}
+            {screen === "checkin" && (
+              <CheckinScreen
+                store={selectedStore}
+                user={user}
+                onBack={() => setScreen(checkinReturnTo)}
+                onDone={() => setScreen(checkinReturnTo === "my" ? "my" : "home")}
+              />
+            )}
+            {screen === "my" && (
+              <MyPageScreen
+                user={user}
+                onLogout={logout}
+                onEnterOwnerMode={() => onGoOwner(user)}
+                onSendPhoto={openCheckinDirect}
+                onEditProfile={() => setScreen("editProfile")}
+                onDeleteAccount={() => setScreen("deleteAccount")}
+              />
+            )}
+            {screen === "editProfile" && (
+              <EditProfileScreen
+                user={user}
+                onBack={() => setScreen("my")}
+                onDone={(updatedUser) => { saveUser(updatedUser); setScreen("my") }}
+              />
+            )}
+            {screen === "deleteAccount" && (
+              <DeleteAccountScreen user={user} onBack={() => setScreen("my")} onDeleted={logout} />
+            )}
+          </main>
+
+          <BottomNav screen={screen} setScreen={setScreen} myBadgeCount={pendingRequestCount} />
+        </div>
+      </div>
     </div>
   )
 }

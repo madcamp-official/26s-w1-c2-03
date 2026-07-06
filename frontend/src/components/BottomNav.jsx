@@ -1,4 +1,4 @@
-// 화면 맨 아래 탭 바 (홈 / 지도 / 마이)
+// 화면 맨 아래 탭 바 (홈 / 지도 / 마이) — lg 이상(PC/태블릿 가로)에서는 SideNav가 대신 보이므로 숨김
 // myBadgeCount: 내 매장에 온 미확인 인증 요청 개수 — 0보다 크면 "마이" 탭에 카카오톡 알림처럼 빨간 뱃지 표시
 export default function BottomNav({ screen, setScreen, myBadgeCount = 0 }) {
   const tabs = [
@@ -8,7 +8,7 @@ export default function BottomNav({ screen, setScreen, myBadgeCount = 0 }) {
   ]
 
   return (
-    <nav className="flex border-t border-slate-100 bg-white">
+    <nav className="flex border-t border-slate-100 bg-white lg:hidden">
       {tabs.map((t) => (
         <button
           key={t.key}
