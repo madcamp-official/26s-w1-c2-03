@@ -201,14 +201,14 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         )}
 
         {!loading && !error && list.length > 0 && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4 2xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5 xl:grid-cols-3">
             {list.map((s) => (
               <button
                 key={s.kakao_place_id}
                 onClick={() => onSelectStore(s)}
-                className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
+                className="flex w-full items-center gap-5 rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm active:scale-[0.99] lg:p-6"
               >
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-2xl">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-3xl lg:h-24 lg:w-24">
                   {s.image_url ? (
                     <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
                   ) : (
@@ -217,7 +217,9 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="min-w-0 flex-1 truncate font-semibold text-slate-900">{s.name}</h2>
+                    <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-slate-900">{s.name}</h2>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {s.distanceKm != null && (
                       <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
                         📍 {formatDistance(s.distanceKm)}
@@ -229,13 +231,13 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-slate-500">
+                  <p className="mt-1.5 text-sm text-slate-500">
                     {(s.categories || [s.category_hint?.split(" > ").pop()].filter(Boolean)).join(", ")}
                     {" · 스탬프 "}
                     {(s.id && stampsByStore[s.id]) ?? 0}개
                   </p>
                   {s.keywords.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
+                    <div className="mt-2 flex flex-wrap gap-1">
                       {s.keywords.map((k) => (
                         <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
                           #{k}
