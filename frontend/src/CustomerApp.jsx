@@ -7,7 +7,7 @@ import MyPageScreen from "./screens/MyPageScreen"
 import UserProfileScreen from "./screens/UserProfileScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
-import { loginWithKakao } from "./lib/api"
+import { loginWithKakao, loginWithGoogle } from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
@@ -17,8 +17,8 @@ function loadUser() {
 export default function CustomerApp({ onGoOwner }) {
   const [user, setUser] = useState(loadUser)
   const [authError, setAuthError] = useState(null)
-  const [kakaoLoading, setKakaoLoading] = useState(false)
-  const handledKakaoCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
+  const [authLoading, setAuthLoading] = useState(false) // 카카오/구글 로그인 공용 로딩 상태
+  const handledAuthCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
 
   const [screen, setScreen] = useState("home")
   const [selectedStore, setSelectedStore] = useState(null)
@@ -49,26 +49,28 @@ export default function CustomerApp({ onGoOwner }) {
     }
   }, [])
 
-  // 카카오 로그인 후 리다이렉트되어 돌아왔을 때 (?code=... 처리)
+  // 카카오/구글 로그인 후 리다이렉트되어 돌아왔을 때 (?code=...&state=kakao|google 처리)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const code = params.get("code")
-    const kakaoAuthError = params.get("error")
+    const state = params.get("state")
+    const oauthError = params.get("error")
 
-    if (kakaoAuthError) {
-      setAuthError("카카오 로그인이 취소되었어요.")
+    if (oauthError) {
+      setAuthError("로그인이 취소되었어요.")
       window.history.replaceState({}, "", window.location.pathname)
       return
     }
 
-    if (code && !handledKakaoCode.current) {
-      handledKakaoCode.current = true
-      setKakaoLoading(true)
-      loginWithKakao({ code, redirectUri: window.location.origin })
+    if (code && !handledAuthCode.current) {
+      handledAuthCode.current = true
+      setAuthLoading(true)
+      const login = state === "google" ? loginWithGoogle : loginWithKakao
+      login({ code, redirectUri: window.location.origin })
         .then((u) => saveUser(u))
         .catch((err) => setAuthError(err.message))
         .finally(() => {
-          setKakaoLoading(false)
+          setAuthLoading(false)
           window.history.replaceState({}, "", window.location.pathname)
         })
     }
@@ -80,7 +82,25 @@ export default function CustomerApp({ onGoOwner }) {
       setAuthError("카카오 SDK를 불러오지 못했어요. index.html을 확인해주세요.")
       return
     }
-    window.Kakao.Auth.authorize({ redirectUri: window.location.origin })
+    window.Kakao.Auth.authorize({ redirectUri: window.location.origin, state: "kakao" })
+  }
+
+  // 구글은 별도 SDK 없이 OAuth 2.0 authorization code 플로우로 직접 리다이렉트
+  const startGoogleLogin = () => {
+    setAuthError(null)
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      setAuthError("VITE_GOOGLE_CLIENT_ID가 설정되지 않았어요 (frontend/.env 확인)")
+      return
+    }
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: window.location.origin,
+      response_type: "code",
+      scope: "openid email profile",
+      state: "google",
+    })
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
   }
 
   const logout = () => {
@@ -122,7 +142,7 @@ export default function CustomerApp({ onGoOwner }) {
     return loc
   }
 
-  // 로그인은 카카오 하나로만 (아이디/비번 로그인은 더 이상 노출 안 함)
+  // 로그인은 카카오/구글 둘 중 하나 (아이디/비번 로그인은 더 이상 노출 안 함)
   if (!user) {
     return (
       <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col items-center justify-center bg-white px-8">
@@ -138,10 +158,18 @@ export default function CustomerApp({ onGoOwner }) {
 
         <button
           onClick={startKakaoLogin}
-          disabled={kakaoLoading}
-          className="w-full rounded-xl bg-[#FEE500] py-3.5 text-sm font-semibold text-[#191919] shadow-sm"
+          disabled={authLoading}
+          className="mb-2 w-full rounded-xl bg-[#FEE500] py-3.5 text-sm font-semibold text-[#191919] shadow-sm"
         >
-          {kakaoLoading ? "로그인 처리 중..." : "💬 카카오로 시작하기"}
+          {authLoading ? "로그인 처리 중..." : "💬 카카오로 시작하기"}
+        </button>
+
+        <button
+          onClick={startGoogleLogin}
+          disabled={authLoading}
+          className="w-full rounded-xl border border-slate-200 bg-white py-3.5 text-sm font-semibold text-slate-700 shadow-sm"
+        >
+          {authLoading ? "로그인 처리 중..." : "🔍 구글로 시작하기"}
         </button>
       </div>
     )

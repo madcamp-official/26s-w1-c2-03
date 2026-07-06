@@ -64,6 +64,14 @@ export function loginWithKakao({ code, redirectUri }) {
   })
 }
 
+// 구글 로그인 — 카카오와 동일한 방식(인가 코드를 백엔드로 넘겨서 처리)
+export function loginWithGoogle({ code, redirectUri }) {
+  return requestJSON("/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  })
+}
+
 export function createCheckin({ userId, storeId, purpose, photoFile }) {
   const formData = new FormData()
   formData.append("user_id", userId)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { createStore, getCategoryOptions, getKeywordOptions } from "../lib/api"
+import { createStore, getCategoryOptions, getKeywordOptions, searchPlace } from "../lib/api"
 import OptionChips from "../components/OptionChips"
 
 const MAX_KEYWORDS = 3
@@ -13,6 +13,10 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
   const [categories, setCategories] = useState([])
   const [keywords, setKeywords] = useState([])
 
+  const [placeQuery, setPlaceQuery] = useState("")
+  const [placeResults, setPlaceResults] = useState(null)
+  const [searching, setSearching] = useState(false)
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
@@ -24,6 +28,28 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
       .then((options) => setKeywordOptions(options.map((o) => o.name)))
       .catch(() => setKeywordOptions([]))
   }, [])
+
+  // 카카오 장소검색으로 이미 등록된 실제 매장 정보(이름/주소)를 찾아 자동으로 채워줌
+  const handlePlaceSearch = async () => {
+    if (!placeQuery.trim()) return
+    setSearching(true)
+    setError("")
+    try {
+      const results = await searchPlace(placeQuery.trim())
+      setPlaceResults(results)
+    } catch (e) {
+      setError(e.message || "장소 검색에 실패했어요")
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handlePickPlace = (place) => {
+    setName(place.name || "")
+    setAddress(place.address || "")
+    setPlaceResults(null)
+    setPlaceQuery("")
+  }
 
   const toggleCategory = (c) => {
     setCategories((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
@@ -51,6 +77,51 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
       <h2 className="mb-4 text-lg font-semibold text-slate-900">매장 등록</h2>
 
       <div>
+        <label className="mb-1 block text-sm font-medium text-slate-600">매장 검색으로 자동 입력 (선택)</label>
+        <div className="mb-1 flex gap-2">
+          <input
+            value={placeQuery}
+            onChange={(e) => setPlaceQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handlePlaceSearch()}
+            placeholder="실제 매장 이름으로 검색 (예: 성수동 감성카페)"
+            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-amber-400"
+          />
+          <button
+            onClick={handlePlaceSearch}
+            disabled={!placeQuery.trim() || searching}
+            className="whitespace-nowrap rounded-xl bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600 disabled:text-slate-300"
+          >
+            {searching ? "검색 중..." : "검색"}
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-slate-400">
+          검색 결과를 고르면 이름·주소가 자동으로 채워져요. 카테고리·키워드는 검색으로 못 채워서 직접 골라야 해요.
+        </p>
+
+        {placeResults && (
+          <div className="mb-4">
+            {placeResults.length === 0 ? (
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-400">검색 결과가 없어요.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {placeResults.map((p) => (
+                  <button
+                    key={p.kakao_place_id}
+                    onClick={() => handlePickPlace(p)}
+                    className="w-full rounded-xl bg-slate-50 px-4 py-2.5 text-left"
+                  >
+                    <p className="font-medium text-slate-800">{p.name}</p>
+                    <p className="text-xs text-slate-400">
+                      {p.address}
+                      {p.category_hint ? ` · ${p.category_hint}` : ""}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <label className="mb-1 block text-sm font-medium text-slate-600">매장 이름</label>
         <input
           value={name}

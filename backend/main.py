@@ -16,6 +16,8 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 KAKAO_REST_API_KEY = os.getenv("KAKAO_REST_API_KEY")
 KAKAO_CLIENT_SECRET = os.getenv("KAKAO_CLIENT_SECRET")  # 없어도 동작함 (선택사항)
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 CHECKIN_BUCKET = "checkin-photos"
 BADGE_BUCKET = "badge-images"
@@ -335,6 +337,61 @@ async def kakao_login(payload: KakaoLoginRequest):
         return existing.data[0]
 
     result = db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}).execute()
+    return result.data[0]
+
+
+# ---------------------------------------------------------------------
+# 구글 로그인 (카카오 로그인과 동일한 authorization code 플로우)
+# ---------------------------------------------------------------------
+
+class GoogleLoginRequest(BaseModel):
+    code: str
+    redirect_uri: str
+
+
+@app.post("/auth/google")
+async def google_login(payload: GoogleLoginRequest):
+    db = require_supabase()
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET이 설정되지 않았습니다 (.env 확인)")
+
+    # 1. 인가 코드 -> 액세스 토큰 교환
+    token_form = {
+        "grant_type": "authorization_code",
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": payload.redirect_uri,
+        "code": payload.code,
+    }
+
+    async with httpx.AsyncClient() as client:
+        token_res = await client.post("https://oauth2.googleapis.com/token", data=token_form)
+
+    if token_res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"구글 토큰 발급 실패: {token_res.text}")
+
+    access_token = token_res.json().get("access_token")
+
+    # 2. 액세스 토큰으로 사용자 정보 조회
+    async with httpx.AsyncClient() as client:
+        profile_res = await client.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+    if profile_res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"구글 사용자 정보 조회 실패: {profile_res.text}")
+
+    profile = profile_res.json()
+    google_id = profile.get("sub")
+    nickname = profile.get("name") or "구글사용자"
+
+    # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
+    existing = db.table("users").select("*").eq("google_id", google_id).execute()
+    if existing.data:
+        return existing.data[0]
+
+    result = db.table("users").insert({"google_id": google_id, "nickname": nickname}).execute()
     return result.data[0]
 
 

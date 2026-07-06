@@ -42,6 +42,7 @@ users ──< reviews >── stores
 | address | text | 주소 *(사장님 입력)* |
 | categories | text[] | 카페 / 한식 / 일식 / 디저트 … 중복 선택 (예: {카페, 디저트}) *(사장님이 category_options 중에서 선택)* |
 | keywords | text[] | 키워드 배열, 최대 3개 (예: {분위기좋은, 조용한, 디저트맛집}) *(사장님이 keyword_options 중에서 선택)* |
+| image_url | text | 매장 썸네일 사진 주소 — 직접 등록 시 사장님이 업로드(Supabase Storage), 장소검색으로 자동 등록 시 카카오맵 대표 이미지를 자동으로 채움 |
 | lat | double | 위도 — 주소를 좌표로 자동 변환(카카오 API), 폼 입력 아님 |
 | lng | double | 경도 — 위와 동일 |
 | sido | text | 시/도 — 주소에서 자동 추출 |
@@ -58,7 +59,7 @@ users ──< reviews >── stores
 > 매장 등록 폼과 뱃지 조건 폼 모두 여기서 목록을 받아와 선택지로 보여줌. 관리자 페이지에서 추가만 가능(자유 텍스트 입력 폐지).
 
 ### users (손님)
-> 카카오 로그인이 기본, 아이디/비번 로그인은 백업 수단 — 그래서 아래 인증 관련 컬럼은 전부 선택값(nullable)
+> 카카오/구글 로그인이 기본, 아이디/비번 로그인은 백업 수단 — 그래서 아래 인증 관련 컬럼은 전부 선택값(nullable)
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
@@ -66,6 +67,7 @@ users ──< reviews >── stores
 | login_id | text | 로그인 아이디 (간단 로그인 시, 중복 불가) |
 | password_hash | text | 비밀번호 **해시값** (간단 로그인 시, 원문 저장 금지) |
 | kakao_id | text | 카카오 고유 ID (카카오 로그인 시, 중복 불가) |
+| google_id | text | 구글 고유 ID (구글 로그인 시, 중복 불가) |
 | nickname | text | 닉네임 (지도·랭킹에 표시) |
 | created_at | timestamptz | 가입 시각 |
 
@@ -78,6 +80,7 @@ users ──< reviews >── stores
 | photo_url | text | 음식 사진 주소 (Supabase Storage) |
 | purpose | text | 방문 목적: 외식 / 카공 / 혼술 / 혼밥 / 회식 … |
 | status | text | pending(대기) / approved(수락) / rejected(거절) |
+| photo_consent | boolean | 이 인증 사진을 매장 페이지(손님이 보낸 사진)에 공개하는 것에 동의했는지 — 손님이 인증 보낼 때 직접 선택, 기본값 false |
 | created_at | timestamptz | 인증 요청 시각 |
 | reviewed_at | timestamptz | 사장님이 수락·거절한 시각 |
 
@@ -174,6 +177,7 @@ create table stores (
   address text,
   categories text[],                 -- 예: '{카페, 디저트}' (category_options 선택지 중 중복 선택)
   keywords text[],                   -- 예: '{분위기좋은, 조용한, 디저트맛집}' (keyword_options 선택지 중 최대 3개)
+  image_url text,                    -- 매장 썸네일 (직접 등록: 사장님 업로드 / 자동 등록: 카카오맵 대표 이미지)
   lat double precision,              -- 주소 → 좌표 자동 변환(카카오 API)
   lng double precision,
   sido text,                        -- 주소에서 자동 추출한 시/도
@@ -202,10 +206,8 @@ insert into keyword_options (name) values
   ('조용한'), ('가성비'), ('든든한'), ('혼밥환영'), ('국물맛집'), ('데이트'), ('디저트맛집'), ('수제패티')
   on conflict (name) do nothing;
 
--- ※ 기존에 이미 stores.category(text) 컬럼으로 운영 중이었다면 마이그레이션:
--- alter table stores rename column category to categories;
--- alter table stores alter column categories type text[] using
---   case when categories is null then null else array[categories] end;
+-- (stores.category → categories 마이그레이션은 2026-07-04에 이미 실행 완료됨 — 다시 실행하면
+--  "column category does not exist" 에러 남. 재실행 금지)
 
 -- 3. 손님
 -- 카카오 로그인이 기본 수단이 되면서 아이디/비번 로그인은 백업 수단으로 남음.
@@ -215,9 +217,13 @@ create table users (
   login_id text unique,              -- 로그인 아이디 (간단 로그인 사용 시)
   password_hash text,                -- 비밀번호 해시 (간단 로그인 사용 시, 원문 저장 금지)
   kakao_id text unique,               -- 카카오 고유 ID (카카오 로그인 사용 시)
+  google_id text unique,              -- 구글 고유 ID (구글 로그인 사용 시)
   nickname text not null,
   created_at timestamptz default now()
 );
+
+-- ⚠️ [아직 실행 안 함 — 구글 로그인 쓰려면 지금 이 한 줄만 Supabase SQL Editor에서 실행]
+alter table users add column if not exists google_id text unique;
 
 -- 4. 방문 인증 (핵심)
 create table checkins (
@@ -227,9 +233,16 @@ create table checkins (
   photo_url text,
   purpose text,                     -- 외식 / 카공 / 혼술 / 혼밥 / 회식
   status text default 'pending',    -- pending / approved / rejected
+  photo_consent boolean default false, -- 이 사진을 매장 페이지에 공개하는 것에 동의했는지
   created_at timestamptz default now(),
   reviewed_at timestamptz
 );
+
+-- ⚠️ [아직 실행 안 함 — 지금 Supabase SQL Editor에서 실행]
+alter table stores add column if not exists image_url text;
+alter table checkins add column if not exists photo_consent boolean default false;
+-- 스토리지 버킷도 하나 더 필요 (SQL 아님): Supabase 대시보드 → Storage → New bucket
+--   이름: store-thumbnails, Public bucket 체크 (checkin-photos/badge-images와 동일하게 설정)
 
 -- 5. 뱃지 정의
 create table badges (
