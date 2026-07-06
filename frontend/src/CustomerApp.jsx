@@ -195,7 +195,7 @@ export default function CustomerApp({ onGoOwner }) {
     <div className="mx-auto flex h-[100dvh] max-w-[430px] flex-col bg-white">
       <main className="min-h-0 flex-1 overflow-y-auto">
         {screen === "home" && (
-          <HomeScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} />
+          <HomeScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
         )}
         {screen === "map" && (
           <MapScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} />

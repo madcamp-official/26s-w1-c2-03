@@ -1,7 +1,6 @@
 // 매장 상세 — 정보 + 내 스탬프 + 인증 버튼 + 방문 랭킹 + 리워드
-// 리워드는 아직 백엔드에 없어서, 데이터가 있을 때만 섹션을 보여줌 (없으면 숨김, 크래시 방지)
 import { useEffect, useState } from "react"
-import { getStoreRanking, getStorePhotos, getCheckins } from "../lib/api"
+import { getStoreRanking, getStorePhotos, getStoreRewards, getCheckins } from "../lib/api"
 
 const CATEGORY_EMOJI = {
   카페: "☕",
@@ -18,11 +17,18 @@ function emojiFor(categories) {
   return CATEGORY_EMOJI[first] || "🍽️"
 }
 
+// 리워드 하나를 사람이 읽을 문구로 (StoreRewardsScreen과 동일한 규칙)
+function rewardLabel(r) {
+  if (r.reward_kind === "discount") return `${r.target_name} ${r.discount_percent}% 할인`
+  return r.target_type === "menu" ? `${r.target_name} 무료` : `${r.target_name} 증정`
+}
+
 export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSelectProfile }) {
   const [ranking, setRanking] = useState(null)
   const [photos, setPhotos] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null) // 크게 보기용으로 고른 사진
   const [myStamps, setMyStamps] = useState(0)
+  const [rewards, setRewards] = useState(null)
 
   useEffect(() => {
     if (!store) return
@@ -34,6 +40,10 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
     getStorePhotos(store.id)
       .then(setPhotos)
       .catch(() => setPhotos([]))
+    setRewards(null)
+    getStoreRewards(store.id)
+      .then(setRewards)
+      .catch(() => setRewards([]))
   }, [store?.id])
 
   // 이 매장에서 내가 승인받은 체크인들의 스탬프 개수 합 (매장 목록 API엔 안 들어있어서 따로 조회)
@@ -49,7 +59,6 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
 
   const categories = store.categories || []
   const keywords = store.keywords || []
-  const rewards = store.rewards || []
 
   return (
     <div className="pb-4">
@@ -96,18 +105,33 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
           </p>
         </div>
 
-        {/* 사장님 리워드 — 데이터 있을 때만 표시 (아직 백엔드에 리워드 API 없음) */}
-        {rewards.length > 0 && (
-          <section className="mt-6">
-            <h3 className="mb-2 font-semibold text-slate-900">사장님 리워드 🎁</h3>
-            {rewards.map((r, i) => (
-              <div key={i} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="font-medium text-amber-800">{r.title}</p>
-                <p className="text-sm text-amber-600">{r.desc}</p>
-              </div>
-            ))}
-          </section>
-        )}
+        {/* 사장님 리워드 — 스탬프 개수 달성형 (이미 달성한 건 "달성!" 표시) */}
+        <section className="mt-6">
+          <h3 className="mb-2 font-semibold text-slate-900">사장님 리워드 🎁</h3>
+          {rewards === null ? (
+            <p className="text-sm text-slate-400">불러오는 중...</p>
+          ) : rewards.length === 0 ? (
+            <p className="text-sm text-slate-400">아직 등록된 리워드가 없어요</p>
+          ) : (
+            <div className="space-y-1.5">
+              {rewards.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3"
+                >
+                  <p className="text-sm text-amber-800">
+                    <b>스탬프 {r.stamp_threshold}개</b> → {rewardLabel(r)}
+                  </p>
+                  {myStamps >= r.stamp_threshold && (
+                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
+                      달성!
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {/* 인증 버튼 */}

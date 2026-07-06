@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getStores, getCategoryOptions } from "../lib/api"
+import { getStores, getCategoryOptions, getAvailableRewards } from "../lib/api"
 import { storeMatchesQuery } from "../lib/fuzzySearch"
 
 // 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
@@ -21,12 +21,13 @@ function emojiFor(categories) {
 
 // 홈 — 지역(시/도·구) 선택 또는 내 위치 기준 + 카테고리 필터
 // 지역 목록은 실제 등록된 매장들의 sido/gu 값에서, 카테고리 목록은 백엔드 /categories에서 실시간으로 가져옴
-export default function HomeScreen({ onSelectStore, myLocation, locating, onLocate }) {
+export default function HomeScreen({ onSelectStore, myLocation, locating, onLocate, user }) {
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const [categoryOptions, setCategoryOptions] = useState([]) // ["카페", "한식", ...]
+  const [rewardStoreIds, setRewardStoreIds] = useState(new Set()) // 내가 리워드 수령 가능한 매장 id들
 
   const [sido, setSido] = useState(null)
   const [gu, setGu] = useState(null)
@@ -50,6 +51,14 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .then((opts) => setCategoryOptions(opts.map((o) => o.name)))
       .catch(() => setCategoryOptions([])) // 실패해도 "전체"만으로 화면은 뜨게
   }, [])
+
+  // 내가 스탬프 기준을 달성했지만 아직 못 받은 리워드가 있는 매장들 — 리스트에 "리워드 수령 가능" 표시용
+  useEffect(() => {
+    if (!user) return
+    getAvailableRewards(user.id)
+      .then((rewards) => setRewardStoreIds(new Set(rewards.map((r) => r.store_id))))
+      .catch(() => setRewardStoreIds(new Set()))
+  }, [user?.id])
 
   const catChips = ["전체", ...categoryOptions]
 
@@ -224,6 +233,11 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                   {s.distanceKm != null && (
                     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">
                       📍 {formatDistance(s.distanceKm)}
+                    </span>
+                  )}
+                  {rewardStoreIds.has(s.id) && (
+                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
+                      🎁 리워드 수령 가능
                     </span>
                   )}
                 </div>
