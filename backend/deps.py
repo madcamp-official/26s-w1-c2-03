@@ -15,6 +15,7 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
+NTS_API_KEY = os.getenv("NTS_API_KEY")  # 공공데이터포털 "국세청_사업자등록정보 진위확인 및 상태조회 서비스" 서비스키
 
 CHECKIN_BUCKET = "checkin-photos"
 BADGE_BUCKET = "badge-images"

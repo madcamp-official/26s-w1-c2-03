@@ -4,6 +4,12 @@ import OwnerCheckinsScreen from "./screens/OwnerCheckinsScreen"
 import StoreRewardsScreen from "./screens/StoreRewardsScreen"
 import { getStores } from "./lib/api"
 
+const STATUS_BADGE = {
+  pending: { label: "심사중", className: "bg-amber-50 text-amber-600" },
+  approved: { label: "승인됨", className: "bg-emerald-50 text-emerald-600" },
+  rejected: { label: "반려됨", className: "bg-red-50 text-red-500" },
+}
+
 // 사장님 모드 — 카카오로 로그인한 계정이면 누구나 진입 가능.
 // "사장님"이라는 별도 자격이 있는 게 아니라, 이 계정(user.id)으로 등록된 매장이 있으면 그게 사장님인 것.
 //   - 매장이 하나도 없으면 → 매장 등록하기 버튼만
@@ -98,21 +104,29 @@ export default function OwnerApp({ user, onExit }) {
           <div className="px-5 py-6">
             <h2 className="mb-3 text-sm font-semibold text-slate-500">내 매장 ({stores.length})</h2>
             <div className="space-y-2">
-              {stores.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setSelectedStore(s)}
-                  className="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm"
-                >
-                  <div>
-                    <p className="font-semibold text-slate-900">{s.name}</p>
-                    <p className="text-sm text-slate-500">
-                      {(s.categories || []).join(", ")} · {s.address}
-                    </p>
-                  </div>
-                  <span className="text-slate-300">›</span>
-                </button>
-              ))}
+              {stores.map((s) => {
+                const badge = STATUS_BADGE[s.status] || STATUS_BADGE.approved
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedStore(s)}
+                    className="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm"
+                  >
+                    <div>
+                      <div className="mb-1 flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{s.name}</p>
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-500">
+                        {(s.categories || []).join(", ")} · {s.address}
+                      </p>
+                    </div>
+                    <span className="text-slate-300">›</span>
+                  </button>
+                )
+              })}
             </div>
 
             <button

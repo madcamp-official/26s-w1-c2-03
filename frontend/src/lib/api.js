@@ -34,9 +34,12 @@ export function checkHealth() {
   return requestJSON("/health")
 }
 
-export function getStores({ ownerId } = {}) {
+// status 없이 호출하면(손님 화면) 서버가 승인된 매장만 내려줌. ownerId 넘기면(사장님 대시보드) 심사 상태 무관하게 전부.
+// status만 넘기면(관리자 승인 대기 목록) 그 상태의 매장만 전체 사장님 대상으로 조회.
+export function getStores({ ownerId, status } = {}) {
   const params = new URLSearchParams()
   if (ownerId) params.set("owner_id", ownerId)
+  if (status) params.set("status", status)
   const query = params.toString() ? `?${params.toString()}` : ""
   return requestJSON(`/stores${query}`)
 }
@@ -119,9 +122,20 @@ export function createCheckin({ userId, storeId, purpose, photoFile, photoConsen
   return requestForm("/checkins", formData)
 }
 
-// 매장 등록 (사장님 대시보드용) — 주소는 백엔드에서 카카오 API로 좌표/시도/구군 자동 변환됨
-// kakaoPlaceId: 매장 검색으로 골랐을 때만 있음 — 서버가 이걸로 실제 동일 장소인지 정확히 중복 판별함
-export function createStore({ ownerId, name, address, categories, keywords, imageUrl, kakaoPlaceId }) {
+// 매장 등록 신청 (사장님 대시보드용) — 카카오 장소검색으로 고른 실제 매장 + 사업자등록정보로 신청.
+// 서버가 국세청 진위확인을 통과시키면 status='pending'으로 저장되고, 관리자 승인 후 손님 화면에 노출됨.
+export function createStore({
+  ownerId,
+  name,
+  address,
+  categories,
+  keywords,
+  imageUrl,
+  kakaoPlaceId,
+  businessRegistrationNumber,
+  businessOwnerName,
+  businessStartDate,
+}) {
   return requestJSON("/stores", {
     method: "POST",
     body: JSON.stringify({
@@ -132,7 +146,18 @@ export function createStore({ ownerId, name, address, categories, keywords, imag
       keywords,
       image_url: imageUrl,
       kakao_place_id: kakaoPlaceId,
+      business_registration_number: businessRegistrationNumber,
+      business_owner_name: businessOwnerName,
+      business_start_date: businessStartDate,
     }),
+  })
+}
+
+// 관리자 — 매장 등록 신청 승인/반려
+export function reviewStore({ storeId, status }) {
+  return requestJSON(`/stores/${storeId}/review`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
   })
 }
 

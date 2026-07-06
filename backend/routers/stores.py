@@ -6,7 +6,7 @@ import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from deps import KAKAO_REST_API_KEY, STORE_THUMBNAIL_BUCKET, require_supabase, safe_execute
+from deps import KAKAO_REST_API_KEY, NTS_API_KEY, STORE_THUMBNAIL_BUCKET, require_supabase, safe_execute
 
 router = APIRouter()
 
@@ -16,11 +16,16 @@ router = APIRouter()
 
 
 @router.get("/stores")
-def get_stores(owner_id: Optional[str] = None):
+def get_stores(owner_id: Optional[str] = None, status: Optional[str] = None):
     db = require_supabase()
     query = db.table("stores").select("*")
     if owner_id:
         query = query.eq("owner_id", owner_id)
+    if status:
+        query = query.eq("status", status)
+    elif not owner_id:
+        # 손님 화면(지도/홈 등)은 owner_id도 status도 안 넘기는 기본 조회 — 승인된 매장만 보여줌
+        query = query.eq("status", "approved")
     result = safe_execute(query, "매장 목록 조회 실패")
     return result.data
 
@@ -29,10 +34,54 @@ class StoreCreate(BaseModel):
     owner_id: str
     name: str
     address: str
+    kakao_place_id: str  # 카카오 장소 검색으로 고른 실제 매장만 등록 가능 (직접 입력 매장 생성 폐지)
+    business_registration_number: str  # 사업자등록번호 10자리 (국세청 진위확인용)
+    business_owner_name: str  # 대표자 성명 (국세청 진위확인용)
+    business_start_date: str  # 개업일자 YYYYMMDD (국세청 진위확인용)
     categories: Optional[list[str]] = None
     keywords: Optional[list[str]] = None
     image_url: Optional[str] = None  # 장소검색으로 자동 등록할 때 카카오맵 대표 이미지를 여기로 넘김
-    kakao_place_id: Optional[str] = None  # 매장 검색으로 고른 경우, 카카오맵상 실제 장소 ID (중복 판별에 사용)
+
+
+def _validate_brn_checksum(b_no: str) -> bool:
+    # 사업자등록번호 자체 검증용 체크섬 — 국세청 API 호출 전에 형식 오류를 빠르게 걸러내기 위함
+    if not re.fullmatch(r"\d{10}", b_no):
+        return False
+    digits = [int(c) for c in b_no]
+    weights = [1, 3, 7, 1, 3, 7, 1, 3, 5]
+    total = sum(d * w for d, w in zip(digits, weights))
+    total += (digits[8] * 5) // 10
+    return (10 - (total % 10)) % 10 == digits[9]
+
+
+async def verify_business_registration(b_no: str, p_nm: str, start_dt: str) -> dict:
+    # 공공데이터포털 "국세청_사업자등록정보 진위확인 및 상태조회 서비스" — 번호·대표자명·개업일자가
+    # 국세청 데이터와 실제로 일치하는 사업자인지 확인 (셋 중 하나라도 다르면 valid != "01")
+    if not NTS_API_KEY:
+        raise HTTPException(status_code=500, detail="NTS_API_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            "https://api.odcloud.kr/api/nts-businessman/v1/validate",
+            params={"serviceKey": NTS_API_KEY},
+            json={"businesses": [{"b_no": b_no, "start_dt": start_dt, "p_nm": p_nm}]},
+        )
+
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"사업자등록정보 진위확인 실패: {res.text}")
+
+    data = res.json()
+    results = data.get("data") or []
+    if not results:
+        raise HTTPException(status_code=502, detail=f"사업자등록정보 진위확인 응답 오류: {data}")
+
+    result = results[0]
+    if result.get("valid") != "01":
+        raise HTTPException(
+            status_code=422,
+            detail=result.get("valid_msg") or "사업자등록번호·대표자명·개업일자가 국세청 정보와 일치하지 않습니다.",
+        )
+    return result
 
 
 MAX_STORE_KEYWORDS = 3
@@ -80,20 +129,34 @@ async def create_store(payload: StoreCreate):
 
     name = payload.name.strip()
     address = payload.address.strip()
+    b_no = re.sub(r"\D", "", payload.business_registration_number)
+    p_nm = payload.business_owner_name.strip()
+    start_dt = re.sub(r"\D", "", payload.business_start_date)
+
+    if not _validate_brn_checksum(b_no):
+        raise HTTPException(status_code=422, detail="사업자등록번호 형식이 올바르지 않습니다 (10자리 숫자 확인).")
+    if not p_nm:
+        raise HTTPException(status_code=422, detail="대표자 성명을 입력해주세요.")
+    if not re.fullmatch(r"\d{8}", start_dt):
+        raise HTTPException(status_code=422, detail="개업일자는 YYYYMMDD 형식으로 입력해주세요.")
 
     db = require_supabase()
 
-    # 중복 등록 차단
-    # 1순위: 카카오 장소 ID가 있으면 그걸로 비교 — 카카오맵상 실제로 같은 장소인지 정확히 판별
-    # 2순위: 장소 ID가 없거나 다르면 이름·주소를 공백 무시하고 비교 (직접 입력 시 공백 표기 차이 방지)
+    # 중복 등록 차단 (반려된 신청은 재신청할 수 있게 제외)
+    # 1순위: 카카오 장소 ID로 비교 — 카카오맵상 실제로 같은 장소인지 정확히 판별
+    # 2순위: 이름·주소를 공백 무시하고 비교 (표기 차이 방지)
     existing = safe_execute(
-        db.table("stores").select("id, name, address, kakao_place_id"), "중복 매장 확인 실패"
+        db.table("stores").select("id, name, address, kakao_place_id").neq("status", "rejected"),
+        "중복 매장 확인 실패",
     )
     for store in existing.data:
-        if payload.kakao_place_id and store.get("kakao_place_id") == payload.kakao_place_id:
-            raise HTTPException(status_code=409, detail="이미 등록된 매장이에요 (카카오맵상 동일 장소).")
+        if store.get("kakao_place_id") == payload.kakao_place_id:
+            raise HTTPException(status_code=409, detail="이미 등록(신청)된 매장이에요 (카카오맵상 동일 장소).")
         if _normalize(store["name"]) == _normalize(name) and _normalize(store["address"]) == _normalize(address):
-            raise HTTPException(status_code=409, detail="이미 등록된 매장이에요 (같은 이름·주소).")
+            raise HTTPException(status_code=409, detail="이미 등록(신청)된 매장이에요 (같은 이름·주소).")
+
+    # 국세청 사업자등록정보 진위확인 — 번호·대표자명·개업일자가 실제로 일치해야 통과 (여기서 걸러지지 않으면 관리자 심사로 넘어감)
+    await verify_business_registration(b_no, p_nm, start_dt)
 
     geo = await geocode_address(address)
 
@@ -114,6 +177,10 @@ async def create_store(payload: StoreCreate):
         "keywords": payload.keywords,
         "image_url": payload.image_url,
         "kakao_place_id": payload.kakao_place_id,
+        "business_registration_number": b_no,
+        "business_owner_name": p_nm,
+        "business_start_date": start_dt,
+        "status": "pending",  # 국세청 진위확인을 통과해도 관리자 최종 승인 전까지는 손님 화면에 노출 안 됨
         "lat": geo["lat"],
         "lng": geo["lng"],
         "sido": geo["sido"],
@@ -121,6 +188,24 @@ async def create_store(payload: StoreCreate):
     }
 
     result = db.table("stores").insert(row).execute()
+    return result.data[0]
+
+
+class StoreReview(BaseModel):
+    status: str  # approved | rejected
+
+
+@router.patch("/stores/{store_id}/review")
+def review_store(store_id: str, payload: StoreReview):
+    # 관리자 — 사업자 진위확인을 통과한 매장 등록 신청을 최종 승인/반려
+    if payload.status not in ("approved", "rejected"):
+        raise HTTPException(status_code=422, detail="status는 approved 또는 rejected여야 합니다.")
+    db = require_supabase()
+    result = safe_execute(
+        db.table("stores").update({"status": payload.status}).eq("id", store_id), "매장 심사 처리 실패"
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")
     return result.data[0]
 
 

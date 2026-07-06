@@ -33,22 +33,33 @@ users ──< reviews >── stores
 | name | text | 사장님/담당자 이름 |
 | created_at | timestamptz | 가입 시각 |
 
-### stores (매장 — 사장님이 직접 등록)
+### stores (매장 — 카카오맵 실제 장소를 사장님이 사업자 인증 후 "내 매장"으로 등록)
+> 사장님이 이름·주소를 직접 타이핑해서 새로 만드는 게 아니라, 카카오 장소검색 결과 중 하나를 골라
+> 사업자등록번호로 소유권을 인증하는 방식. `status`가 `approved`가 되기 전까지는 손님 화면에 노출 안 됨.
+
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | uuid | 고유 번호 (자동 생성) |
-| owner_id | uuid | 등록한 사장님 (→ owners) |
-| name | text | 매장 이름 *(사장님 입력)* |
-| address | text | 주소 *(사장님 입력)* |
+| owner_id | uuid | 등록 신청한 사장님 (→ owners) |
+| name | text | 매장 이름 (카카오 장소검색 결과에서 가져옴) |
+| address | text | 주소 (카카오 장소검색 결과에서 가져옴) |
 | categories | text[] | 카페 / 한식 / 일식 / 디저트 … 중복 선택 (예: {카페, 디저트}) *(사장님이 category_options 중에서 선택)* |
 | keywords | text[] | 키워드 배열, 최대 3개 (예: {분위기좋은, 조용한, 디저트맛집}) *(사장님이 keyword_options 중에서 선택)* |
 | image_url | text | 매장 썸네일 사진 주소 — 직접 등록 시 사장님이 업로드(Supabase Storage), 장소검색으로 자동 등록 시 카카오맵 대표 이미지를 자동으로 채움 |
-| kakao_place_id | text | 매장 검색으로 등록한 경우 카카오맵상 실제 장소 ID — 중복 매장 등록 판별에 사용 (직접 입력 시 null) |
+| kakao_place_id | text | 카카오맵상 실제 장소 ID — 어떤 실제 매장을 등록 신청한 건지 식별 + 중복 신청 판별에 사용. 이제 필수값 |
+| business_registration_number | text | 사업자등록번호 10자리 — 국세청 진위확인 API로 검증 완료된 값만 저장 |
+| business_owner_name | text | 대표자 성명 — 국세청 진위확인에 사용 (b_no·개업일자와 셋 다 일치해야 통과) |
+| business_start_date | text | 개업일자 YYYYMMDD — 국세청 진위확인에 사용 |
+| status | text | `pending`(국세청 진위확인 통과, 관리자 승인 대기) / `approved`(관리자 승인, 손님 화면 노출) / `rejected`(관리자 반려) |
 | lat | double | 위도 — 주소를 좌표로 자동 변환(카카오 API), 폼 입력 아님 |
 | lng | double | 경도 — 위와 동일 |
 | sido | text | 시/도 — 주소에서 자동 추출 |
 | gu | text | 구/군 — 주소에서 자동 추출 |
-| created_at | timestamptz | 등록 시각 |
+| created_at | timestamptz | 등록 신청 시각 |
+
+> 등록 흐름: ① 사장님이 시/도·구 선택 후 카카오 장소검색 → 매장 선택 → ② 사업자등록번호·대표자명·개업일자 입력
+> → ③ 서버가 국세청 API로 진위확인 (불일치하면 즉시 거절) → ④ 통과하면 `pending`으로 저장 →
+> ⑤ 관리자가 승인하면 `approved`로 바뀌고 그때부터 손님 지도/홈 화면에 노출됨.
 
 ### category_options / keyword_options (관리자가 추가하는 선택지 목록)
 | 컬럼 | 타입 | 설명 |
@@ -171,7 +182,7 @@ create table owners (
   created_at timestamptz default now()
 );
 
--- 2. 매장 (사장님이 직접 등록)
+-- 2. 매장 (카카오맵 실제 장소 + 사업자 인증 기반 등록)
 create table stores (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid references owners(id),
@@ -180,6 +191,11 @@ create table stores (
   categories text[],                 -- 예: '{카페, 디저트}' (category_options 선택지 중 중복 선택)
   keywords text[],                   -- 예: '{분위기좋은, 조용한, 디저트맛집}' (keyword_options 선택지 중 최대 3개)
   image_url text,                    -- 매장 썸네일 (직접 등록: 사장님 업로드 / 자동 등록: 카카오맵 대표 이미지)
+  kakao_place_id text,                -- 카카오맵상 실제 장소 ID (필수, 중복 신청 판별에도 사용)
+  business_registration_number text,  -- 사업자등록번호 10자리 (국세청 진위확인 통과분만 저장)
+  business_owner_name text,           -- 대표자 성명 (국세청 진위확인용)
+  business_start_date text,           -- 개업일자 YYYYMMDD (국세청 진위확인용)
+  status text default 'pending',      -- pending(승인 대기) / approved(승인) / rejected(반려)
   lat double precision,              -- 주소 → 좌표 자동 변환(카카오 API)
   lng double precision,
   sido text,                        -- 주소에서 자동 추출한 시/도
@@ -251,6 +267,15 @@ alter table stores add column if not exists kakao_place_id text;
 
 -- ⚠️ [아직 실행 안 함 — 네이버 로그인 쓰려면 지금 이 한 줄만 Supabase SQL Editor에서 실행]
 alter table users add column if not exists naver_id text unique;
+
+-- ⚠️ [아직 실행 안 함 — 매장 등록을 "사업자 인증 + 관리자 승인" 방식으로 바꾸는 데 필요, 지금 Supabase SQL Editor에서 실행]
+alter table stores add column if not exists business_registration_number text;
+alter table stores add column if not exists business_owner_name text;
+alter table stores add column if not exists business_start_date text;
+alter table stores add column if not exists status text default 'pending';
+-- 이미 등록되어 있던 기존 매장(및 방금 초기화 이전 데이터)은 그대로 손님 화면에 노출되도록 승인 처리
+update stores set status = 'approved' where status is null;
+create index if not exists idx_stores_status on stores(status);
 
 -- 5. 뱃지 정의
 create table badges (

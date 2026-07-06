@@ -1,15 +1,17 @@
 import { useState } from "react"
 import AdminBadgeScreen from "./screens/AdminBadgeScreen"
 import AdminOptionsScreen from "./screens/AdminOptionsScreen"
+import AdminStoreApprovalScreen from "./screens/AdminStoreApprovalScreen"
 
 const TABS = [
+  { key: "stores", label: "매장 승인" },
   { key: "badges", label: "뱃지 관리" },
   { key: "options", label: "카테고리·키워드 관리" },
 ]
 
-// 관리자 페이지 — 뱃지 관리 / 카테고리·키워드 관리 탭 전환
+// 관리자 페이지 — 매장 승인 / 뱃지 관리 / 카테고리·키워드 관리 탭 전환
 export default function AdminApp() {
-  const [tab, setTab] = useState("badges")
+  const [tab, setTab] = useState("stores")
 
   return (
     <div>
@@ -27,7 +29,13 @@ export default function AdminApp() {
         ))}
       </div>
 
-      {tab === "badges" ? <AdminBadgeScreen /> : <AdminOptionsScreen />}
+      {tab === "stores" ? (
+        <AdminStoreApprovalScreen />
+      ) : tab === "badges" ? (
+        <AdminBadgeScreen />
+      ) : (
+        <AdminOptionsScreen />
+      )}
     </div>
   )
 }
