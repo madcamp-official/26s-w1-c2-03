@@ -22,6 +22,20 @@ function emojiFor(category) {
 // 카테고리 칩은 이 순서로 고정하되, 지금 주변 결과에 실제로 있는 카테고리만 노출함 (빈 칩 방지)
 const CATEGORY_ORDER = ["한식", "중식", "일식", "양식", "분식", "치킨", "주점", "카페", "디저트", "기타"]
 
+// 목록 로딩 중 자리를 잡아주는 스켈레톤 카드 (빈 화면에 텍스트만 뜨는 것보다 덜 휑함)
+function SkeletonCard() {
+  return (
+    <div className="flex items-center gap-5 rounded-2xl border border-slate-100 bg-white p-5 lg:p-6">
+      <div className="h-20 w-20 shrink-0 animate-pulse rounded-xl bg-slate-100 lg:h-24 lg:w-24" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
+        <div className="h-3 w-1/3 animate-pulse rounded bg-slate-100" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-slate-100" />
+      </div>
+    </div>
+  )
+}
+
 // 홈 — 사장님 등록(인증) 여부와 무관하게 카카오맵 실제 매장을 위치 기반 + 검색으로 보여줌.
 // 우리 DB(getStores)에 이미 있는 매장(누군가 방문했거나 사장님이 인증한 매장)은 스탬프·리워드 표시를 덧입힘.
 export default function HomeScreen({ onSelectStore, myLocation, locating, onLocate, user }) {
@@ -209,7 +223,13 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       </div>
 
       <div className="px-5">
-        {loading && <p className="py-10 text-center text-slate-400">불러오는 중...</p>}
+        {loading && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        )}
 
         {!loading && error && (
           <p className="py-10 text-center text-red-400">매장을 불러오지 못했어요: {error}</p>
@@ -231,7 +251,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
               <button
                 key={s.kakao_place_id}
                 onClick={() => onSelectStore(s)}
-                className="flex w-full items-center gap-5 rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm active:scale-[0.99] lg:p-6"
+                className="flex w-full items-center gap-5 rounded-2xl border border-slate-100 bg-white p-5 text-left shadow-sm transition-all active:scale-[0.99] hover:border-amber-200 hover:shadow-md lg:p-6"
               >
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-3xl lg:h-24 lg:w-24">
                   {s.image_url ? (

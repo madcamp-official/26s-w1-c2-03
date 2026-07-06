@@ -168,7 +168,8 @@ export default function CustomerApp({ onGoOwner }) {
       lng: place.lng,
       imageUrl: place.image_url,
     })
-    setSelectedStore(store)
+    // resolve된 DB 행엔 카테고리가 없을 수 있어서, 카카오에서 뽑은 대분류를 상세 표시용으로 실어줌
+    setSelectedStore({ ...store, category: store.categories?.length ? undefined : place.category })
     setScreen("detail")
   }
 

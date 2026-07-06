@@ -3,18 +3,19 @@ import { useEffect, useState } from "react"
 import { getStoreRanking, getStorePhotos, getStoreRewards, getCheckins, getUserRewardClaims, claimReward } from "../lib/api"
 
 const CATEGORY_EMOJI = {
-  카페: "☕",
   한식: "🍚",
   중식: "🥢",
   일식: "🍣",
   양식: "🍝",
   분식: "🍢",
-  술집: "🍺",
+  치킨: "🍗",
+  주점: "🍺",
+  카페: "☕",
   디저트: "🍰",
+  기타: "🍽️",
 }
-function emojiFor(categories) {
-  const first = categories?.[0]
-  return CATEGORY_EMOJI[first] || "🍽️"
+function emojiFor(category) {
+  return CATEGORY_EMOJI[category] || "🍽️"
 }
 
 // 리워드 하나를 사람이 읽을 문구로 (StoreRewardsScreen과 동일한 규칙)
@@ -79,8 +80,9 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
 
   if (!store) return null
 
-  const categories = store.categories || []
   const keywords = store.keywords || []
+  // 사장님이 지정한 카테고리 > 카카오에서 뽑은 대분류(홈/지도에서 넘어옴) 순
+  const category = store.categories?.length ? store.categories.join(", ") : store.category || ""
 
   return (
     <div className="pb-4">
@@ -103,13 +105,15 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
               />
             ) : (
               <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl lg:h-64">
-                {emojiFor(categories)}
+                {emojiFor(store.categories?.[0] || store.category)}
               </div>
             )}
 
             <h2 className="mt-4 text-2xl font-bold text-slate-900">{store.name}</h2>
             <p className="text-slate-500">
-              {categories.join(", ")} · {store.address}
+              {category && <span className="font-medium text-amber-600">{category}</span>}
+              {category && store.address ? " · " : ""}
+              {store.address}
             </p>
             {keywords.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
@@ -136,7 +140,9 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
               {rewards === null ? (
                 <p className="text-sm text-slate-400">불러오는 중...</p>
               ) : rewards.length === 0 ? (
-                <p className="text-sm text-slate-400">아직 등록된 리워드가 없어요</p>
+                <p className="rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-400">
+                  아직 등록된 리워드가 없어요
+                </p>
               ) : (
                 <div className="space-y-1.5">
                   {rewards.map((r) => {
@@ -195,7 +201,9 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
             {ranking === null ? (
               <p className="text-sm text-slate-400">불러오는 중...</p>
             ) : ranking.length === 0 ? (
-              <p className="text-sm text-slate-400">아직 방문 인증 기록이 없어요</p>
+              <p className="rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-400">
+                아직 방문 인증 기록이 없어요
+              </p>
             ) : (
               <div className="space-y-1.5">
                 {ranking.slice(0, 20).map((v, i) => (
@@ -221,7 +229,9 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
             {photos === null ? (
               <p className="text-sm text-slate-400">불러오는 중...</p>
             ) : photos.length === 0 ? (
-              <p className="text-sm text-slate-400">아직 공개된 인증 사진이 없어요</p>
+              <p className="rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-400">
+                아직 공개된 인증 사진이 없어요
+              </p>
             ) : (
               <div className="grid grid-cols-3 gap-1.5">
                 {photos.map((p, i) => (
