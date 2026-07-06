@@ -208,6 +208,15 @@ export function getPlaceImage(placeUrl) {
   return requestJSON(`/kakao/place-image?place_url=${encodeURIComponent(placeUrl)}`)
 }
 
+// 손님 화면 목록의 여러 매장 썸네일을 한 번에 가져옴 — { place_url: image_url } 맵을 돌려줌
+// (못 찾은 매장은 응답에 안 들어오고, 프론트에서 이모지로 대체됨)
+export function getPlaceImages(placeUrls) {
+  return requestJSON("/kakao/place-images", {
+    method: "POST",
+    body: JSON.stringify({ place_urls: placeUrls }),
+  })
+}
+
 // 매장 상세 화면의 "손님이 보낸 사진" 갤러리 (승인 + 공개 동의된 것만)
 export function getStorePhotos(storeId) {
   return requestJSON(`/stores/${storeId}/photos`)

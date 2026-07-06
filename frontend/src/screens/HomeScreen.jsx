@@ -1,28 +1,26 @@
 import { useEffect, useMemo, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getNearbyPlaces, searchPlace, getStores, getAvailableRewards } from "../lib/api"
+import { getNearbyPlaces, searchPlace, getStores, getAvailableRewards, getPlaceImages } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
 
 const CATEGORY_EMOJI = {
-  카페: "☕",
   한식: "🍚",
   중식: "🥢",
   일식: "🍣",
   양식: "🍝",
   분식: "🍢",
-  술집: "🍺",
+  치킨: "🍗",
+  주점: "🍺",
+  카페: "☕",
   디저트: "🍰",
+  기타: "🍽️",
 }
-function emojiFor(categories) {
-  const first = categories?.[0]
-  return CATEGORY_EMOJI[first] || "🍽️"
+function emojiFor(category) {
+  return CATEGORY_EMOJI[category] || "🍽️"
 }
 
-const CAT_CHIPS = [
-  { key: "전체", groupCode: null },
-  { key: "음식점", groupCode: "FD6" },
-  { key: "카페", groupCode: "CE7" },
-]
+// 카테고리 칩은 이 순서로 고정하되, 지금 주변 결과에 실제로 있는 카테고리만 노출함 (빈 칩 방지)
+const CATEGORY_ORDER = ["한식", "중식", "일식", "양식", "분식", "치킨", "주점", "카페", "디저트", "기타"]
 
 // 홈 — 사장님 등록(인증) 여부와 무관하게 카카오맵 실제 매장을 위치 기반 + 검색으로 보여줌.
 // 우리 DB(getStores)에 이미 있는 매장(누군가 방문했거나 사장님이 인증한 매장)은 스탬프·리워드 표시를 덧입힘.
@@ -34,6 +32,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
   const [ourStoresByPlaceId, setOurStoresByPlaceId] = useState({}) // kakao_place_id -> 우리 DB 매장(id/categories/keywords/image_url)
   const [rewardStoreIds, setRewardStoreIds] = useState(new Set()) // 내가 리워드 수령 가능한 매장 id들
   const [stampsByStore, setStampsByStore] = useState({}) // storeId -> 내 스탬프 개수
+  const [thumbsByUrl, setThumbsByUrl] = useState({}) // place_url -> 카카오맵에서 긁어온 대표 이미지 (점진적으로 채워짐)
 
   const [cat, setCat] = useState("전체")
   const [query, setQuery] = useState("")
@@ -108,27 +107,53 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .catch(() => setStampsByStore({}))
   }, [user?.id])
 
+  // 목록에 뜬 매장들의 카카오맵 대표 이미지를 배경에서 한 번에 긁어와 채워줌 (카드는 먼저 이모지로 뜨고, 도착하는 대로 사진으로 교체)
+  useEffect(() => {
+    const urls = places.map((p) => p.place_url).filter((u) => u && !(u in thumbsByUrl))
+    if (urls.length === 0) return
+    let cancelled = false
+    getPlaceImages(urls)
+      .then((map) => {
+        if (!cancelled) setThumbsByUrl((prev) => ({ ...prev, ...map }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [places])
+
   // 카카오 결과 + 우리 DB 데이터 병합, 거리 계산, 카테고리 필터
   const list = useMemo(() => {
     let merged = places.map((p) => {
       const ours = ourStoresByPlaceId[p.kakao_place_id]
+      // 우리 DB에 사장님이 지정한 카테고리가 있으면 그걸 우선, 없으면 카카오에서 뽑은 대분류(p.category)
+      const displayCategory = ours?.categories?.length ? ours.categories[0] : p.category
       return {
         ...p,
         id: ours?.id,
-        categories: ours?.categories?.length ? ours.categories : undefined,
+        displayCategory,
         keywords: ours?.keywords || [],
-        image_url: ours?.image_url || undefined,
+        // 우리 DB 이미지 > 카카오맵에서 긁어온 썸네일 순으로 사용
+        image_url: ours?.image_url || thumbsByUrl[p.place_url] || undefined,
         distanceKm: myLocation ? haversineKm(myLocation.lat, myLocation.lng, p.lat, p.lng) : null,
       }
     })
 
     if (cat !== "전체") {
-      const groupCode = CAT_CHIPS.find((c) => c.key === cat)?.groupCode
-      merged = merged.filter((p) => p.category_group_code === groupCode)
+      merged = merged.filter((p) => p.displayCategory === cat)
     }
 
     return merged.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-  }, [places, ourStoresByPlaceId, cat, myLocation])
+  }, [places, ourStoresByPlaceId, thumbsByUrl, cat, myLocation])
+
+  // 지금 결과에 실제로 존재하는 카테고리만, 고정 순서대로 칩으로 노출
+  const catChips = useMemo(() => {
+    const present = new Set(
+      places.map((p) => ourStoresByPlaceId[p.kakao_place_id]?.categories?.[0] || p.category)
+    )
+    return ["전체", ...CATEGORY_ORDER.filter((c) => present.has(c))]
+  }, [places, ourStoresByPlaceId])
 
   return (
     <div>
@@ -172,13 +197,13 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       )}
 
       <div className="mt-3 flex gap-2 overflow-x-auto px-5 pb-4">
-        {CAT_CHIPS.map((c) => (
+        {catChips.map((c) => (
           <button
-            key={c.key}
-            onClick={() => setCat(c.key)}
-            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm ${cat === c.key ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"}`}
+            key={c}
+            onClick={() => setCat(c)}
+            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm ${cat === c ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"}`}
           >
-            {c.key}
+            {c === "전체" ? c : `${emojiFor(c)} ${c}`}
           </button>
         ))}
       </div>
@@ -212,7 +237,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                   {s.image_url ? (
                     <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
                   ) : (
-                    emojiFor(s.categories)
+                    emojiFor(s.displayCategory)
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -232,7 +257,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                     )}
                   </div>
                   <p className="mt-1.5 text-sm text-slate-500">
-                    {(s.categories || [s.category_hint?.split(" > ").pop()].filter(Boolean)).join(", ")}
+                    {s.displayCategory || "음식점"}
                     {" · 스탬프 "}
                     {(s.id && stampsByStore[s.id]) ?? 0}개
                   </p>

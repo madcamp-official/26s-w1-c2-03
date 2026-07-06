@@ -52,7 +52,16 @@ def resolve_store(payload: StoreResolve):
         db.table("stores").select("*").eq("kakao_place_id", payload.kakao_place_id), "매장 조회 실패"
     )
     if existing.data:
-        return existing.data[0]
+        store = existing.data[0]
+        # 예전에 이미지 없이 만들어진 매장이면, 이번에 넘어온 카카오 썸네일로 채워줌(백필).
+        # 이미 이미지가 있으면(사장님이 올렸거나 전에 채워졌으면) 건드리지 않음.
+        if not store.get("image_url") and payload.image_url:
+            updated = safe_execute(
+                db.table("stores").update({"image_url": payload.image_url}).eq("id", store["id"]),
+                "매장 이미지 갱신 실패",
+            )
+            return updated.data[0]
+        return store
 
     row = {
         "name": payload.name.strip(),
@@ -282,13 +291,57 @@ async def upload_store_thumbnail(store_id: str, image: UploadFile = File(...)):
     return result.data[0]
 
 
+# 카카오가 주는 category_group_code는 음식점(FD6)/카페(CE7) 딱 두 종류뿐이라 필터로 쓰기엔 너무 뭉뚱그려짐.
+# 대신 훨씬 자세한 category_name(예: "음식점 > 한식 > 국수", "카페 > 디저트카페")을 파싱해서
+# 손님 화면에서 쓸 대분류(한식/중식/일식/양식/분식/치킨/주점/카페/디저트/기타)로 정규화한다.
+_FOOD_CATEGORY_KEYWORDS = [
+    ("분식", "분식"),
+    ("한식", "한식"),
+    ("중식", "중식"),
+    ("중국", "중식"),
+    ("일식", "일식"),
+    ("초밥", "일식"),
+    ("돈까스", "일식"),
+    ("일본", "일식"),
+    ("양식", "양식"),
+    ("이탈리", "양식"),
+    ("프렌치", "양식"),
+    ("스테이크", "양식"),
+    ("파스타", "양식"),
+    ("피자", "양식"),
+    ("치킨", "치킨"),
+    ("술집", "주점"),
+    ("호프", "주점"),
+    ("주점", "주점"),
+    ("포장마차", "주점"),
+    ("바텐더", "주점"),
+]
+
+
+def _derive_category(category_name: Optional[str], group_code: Optional[str]) -> str:
+    name = category_name or ""
+    # 베이커리·디저트류는 그룹 무관하게 디저트로 (카페 밑이든 "음식점 > 간식 > 제과,베이커리"든)
+    if any(k in name for k in ("베이커리", "제과", "디저트", "도넛", "케이크", "빙수", "아이스크림")):
+        return "디저트"
+    # 카페 계열 (CE7 그룹이거나 경로에 '카페'가 있음)
+    if group_code == "CE7" or "카페" in name:
+        return "카페"
+    # 음식점 계열 — 알려진 대분류 키워드를 경로 안에서 찾음 (더 구체적인 것부터)
+    for keyword, category in _FOOD_CATEGORY_KEYWORDS:
+        if keyword in name:
+            return category
+    return "기타"
+
+
 def _normalize_kakao_doc(doc: dict) -> dict:
+    group_code = doc.get("category_group_code") or None
     return {
         "kakao_place_id": doc.get("id"),
         "name": doc.get("place_name"),
         "address": doc.get("road_address_name") or doc.get("address_name"),
         "category_hint": doc.get("category_name"),
-        "category_group_code": doc.get("category_group_code") or None,  # FD6(음식점) / CE7(카페) — 손님 화면 카테고리 필터용
+        "category_group_code": group_code,  # FD6(음식점) / CE7(카페) — 원본 그룹 코드 (호환용)
+        "category": _derive_category(doc.get("category_name"), group_code),  # 손님 화면 세분화 필터용 대분류
         "phone": doc.get("phone") or None,
         "place_url": doc.get("place_url"),  # 카카오맵 상세 페이지 — 대표 이미지 자동으로 가져올 때 사용
         "lat": float(doc["y"]),
@@ -362,6 +415,34 @@ async def get_nearby_places(lat: float, lng: float, radius: int = 3000):
     return results
 
 
+# 같은 place_url을 손님마다·화면 이동마다 반복 스크래핑하지 않도록 서버 메모리에 결과를 캐싱.
+# (실패(None)도 캐싱해서 죽은 페이지를 매번 다시 때리지 않게 함)
+_place_image_cache: dict[str, Optional[str]] = {}
+
+
+async def _scrape_og_image(place_url: str) -> Optional[str]:
+    if place_url in _place_image_cache:
+        return _place_image_cache[place_url]
+
+    image_url = None
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=5) as client:
+            res = await client.get(place_url, headers={"User-Agent": "Mozilla/5.0"})
+        if res.status_code == 200:
+            match = re.search(
+                r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', res.text
+            )
+            if match:
+                image_url = match.group(1)
+                if image_url.startswith("//"):  # 프로토콜 생략 URL은 https로 고정
+                    image_url = f"https:{image_url}"
+    except httpx.HTTPError:
+        image_url = None
+
+    _place_image_cache[place_url] = image_url
+    return image_url
+
+
 @router.get("/kakao/place-image")
 async def get_place_image(place_url: str):
     """
@@ -369,22 +450,29 @@ async def get_place_image(place_url: str):
     별도 이미지 API가 없어서, 그 페이지에 이미 박혀 있는 og:image 메타태그를 그대로 읽어옴
     (사장님이 매장 검색으로 자동 등록할 때, 등록 안 해도 대표 사진 하나는 채워주기 위함).
     """
-    try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=5) as client:
-            res = await client.get(place_url, headers={"User-Agent": "Mozilla/5.0"})
-    except httpx.HTTPError:
-        return {"image_url": None}
+    return {"image_url": await _scrape_og_image(place_url)}
 
-    if res.status_code != 200:
-        return {"image_url": None}
 
-    match = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', res.text)
-    if not match:
-        return {"image_url": None}
-    image_url = match.group(1)
-    if image_url.startswith("//"):  # 프로토콜 생략 URL은 https로 고정
-        image_url = f"https:{image_url}"
-    return {"image_url": image_url}
+class PlaceImagesRequest(BaseModel):
+    place_urls: list[str]
+
+
+@router.post("/kakao/place-images")
+async def get_place_images(payload: PlaceImagesRequest):
+    """
+    손님 화면(홈/지도) 목록의 여러 매장 썸네일을 한 번에 가져옴.
+    각 카카오맵 상세 페이지 og:image를 동시성 제한(최대 8개)으로 병렬 스크래핑하고,
+    찾은 것만 { place_url: image_url } 형태로 돌려줌 (못 찾은 건 프론트에서 이모지로 대체).
+    """
+    urls = list(dict.fromkeys(u for u in payload.place_urls if u))[:45]  # 중복 제거 + 안전 상한
+    semaphore = asyncio.Semaphore(8)
+
+    async def fetch_one(url: str) -> tuple[str, Optional[str]]:
+        async with semaphore:
+            return url, await _scrape_og_image(url)
+
+    pairs = await asyncio.gather(*[fetch_one(u) for u in urls])
+    return {url: image for url, image in pairs if image}
 
 
 @router.get("/stores/{store_id}/ranking")

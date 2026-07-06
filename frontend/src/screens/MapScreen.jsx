@@ -1,32 +1,30 @@
 // 카카오맵 버전 MapScreen — 사장님 등록(인증) 여부와 무관하게 카카오맵 실제 매장을 위치 기반 + 검색으로 보여줌.
 // 우리 DB(getStores)에 이미 있는 매장은 스탬프·카테고리 표시를 덧입힘.
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getNearbyPlaces, searchPlace, getStores } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
 
 const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
 
-const CAT_CHIPS = [
-  { key: "전체", groupCode: null },
-  { key: "음식점", groupCode: "FD6" },
-  { key: "카페", groupCode: "CE7" },
-]
-
 const CATEGORY_EMOJI = {
-  카페: "☕",
   한식: "🍚",
   중식: "🥢",
   일식: "🍣",
   양식: "🍝",
   분식: "🍢",
-  술집: "🍺",
+  치킨: "🍗",
+  주점: "🍺",
+  카페: "☕",
   디저트: "🍰",
+  기타: "🍽️",
 }
-function emojiFor(categories) {
-  const first = categories?.[0]
-  return CATEGORY_EMOJI[first] || "🍽️"
+function emojiFor(category) {
+  return CATEGORY_EMOJI[category] || "🍽️"
 }
+
+// 카테고리 칩은 이 순서로 고정하되, 지금 결과에 실제로 있는 카테고리만 노출 (HomeScreen과 동일)
+const CATEGORY_ORDER = ["한식", "중식", "일식", "양식", "분식", "치킨", "주점", "카페", "디저트", "기타"]
 
 function loadKakaoMaps() {
   return new Promise((resolve, reject) => {
@@ -59,7 +57,7 @@ function makePinHtml(store) {
       background:${bg};border:${border};
       box-shadow:0 2px 6px rgba(0,0,0,.3);opacity:${opacity};
       cursor:pointer;">
-      <span style="transform:rotate(45deg);font-size:20px;">${emojiFor(store.categories)}</span>
+      <span style="transform:rotate(45deg);font-size:20px;">${emojiFor(store.displayCategory)}</span>
     </div>`
 }
 
@@ -139,19 +137,25 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   }, [user?.id])
 
   const visibleStores = places
-    .filter((p) => {
-      const groupCode = CAT_CHIPS.find((c) => c.key === cat)?.groupCode
-      return cat === "전체" || p.category_group_code === groupCode
-    })
     .map((p) => {
       const ours = ourStoresByPlaceId[p.kakao_place_id]
+      const displayCategory = ours?.categories?.length ? ours.categories[0] : p.category
       return {
         ...p,
         id: ours?.id,
-        categories: ours?.categories?.length ? ours.categories : undefined,
+        displayCategory,
         myStampCount: (ours?.id && stampsByStore[ours.id]) ?? 0,
       }
     })
+    .filter((p) => cat === "전체" || p.displayCategory === cat)
+
+  // 지금 결과에 실제로 존재하는 카테고리만, 고정 순서대로 칩으로 노출
+  const catChips = useMemo(() => {
+    const present = new Set(
+      places.map((p) => ourStoresByPlaceId[p.kakao_place_id]?.categories?.[0] || p.category)
+    )
+    return ["전체", ...CATEGORY_ORDER.filter((c) => present.has(c))]
+  }, [places, ourStoresByPlaceId])
 
   useEffect(() => {
     let cancelled = false
@@ -178,9 +182,9 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     const el = document.createElement("div")
     el.innerHTML = `
       <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
-        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.categories)} ${store.name}</p>
+        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.displayCategory)} ${store.name}</p>
         <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
-          ${(store.categories || [store.category_hint?.split(" > ").pop()].filter(Boolean)).join(", ")}${(store.myStampCount ?? 0) > 0 ? ` · 스탬프 ${store.myStampCount}개 ✅` : " · 아직 안 감"}
+          ${store.displayCategory || "음식점"}${(store.myStampCount ?? 0) > 0 ? ` · 스탬프 ${store.myStampCount}개 ✅` : " · 아직 안 감"}
         </p>
         ${
           myLocation
@@ -295,13 +299,13 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
           )}
         </div>
         <div className="flex gap-2 overflow-x-auto">
-          {CAT_CHIPS.map((c) => (
+          {catChips.map((c) => (
             <button
-              key={c.key}
-              onClick={() => setCat(c.key)}
-              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm shadow-sm ${cat === c.key ? "bg-amber-500 text-white" : "bg-white text-slate-600"}`}
+              key={c}
+              onClick={() => setCat(c)}
+              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm shadow-sm ${cat === c ? "bg-amber-500 text-white" : "bg-white text-slate-600"}`}
             >
-              {c.key}
+              {c === "전체" ? c : `${emojiFor(c)} ${c}`}
             </button>
           ))}
         </div>
