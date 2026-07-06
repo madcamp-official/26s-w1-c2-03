@@ -10,7 +10,7 @@ import EditProfileScreen from "./screens/EditProfileScreen"
 import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
 import { getMyLocation } from "./lib/geo"
-import { loginWithKakao, loginWithGoogle, loginWithNaver, getStores, getCheckins } from "./lib/api"
+import { loginWithKakao, loginWithGoogle, loginWithNaver, getStores, getCheckins, resolveStore } from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
@@ -155,8 +155,19 @@ export default function CustomerApp({ onGoOwner }) {
     setScreen("home")
   }
 
-  const openStore = (store) => {
+  // 홈/지도에서 고른 매장(카카오 데이터일 수도, 이미 우리 DB에 있는 매장일 수도 있음)을 열람.
+  // resolveStore가 kakao_place_id 기준으로 있으면 그대로, 없으면 미인증 상태로 만들어서
+  // 체크인·랭킹·뱃지가 사장님 인증 여부와 무관하게 바로 동작하게 함.
+  const openStore = async (place) => {
     if (screen === "home" || screen === "map") setPrevScreen(screen)
+    const store = await resolveStore({
+      kakaoPlaceId: place.kakao_place_id,
+      name: place.name,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+      imageUrl: place.image_url,
+    })
     setSelectedStore(store)
     setScreen("detail")
   }

@@ -13,10 +13,10 @@ import ImageCropper from "../components/ImageCropper"
 
 const MAX_KEYWORDS = 3
 
-// 매장 등록 신청 — ownerId는 로그인한 계정(카카오)의 id를 그대로 씀.
-// 직접 이름·주소를 입력해 새 매장을 만드는 게 아니라, 카카오맵에 실제로 있는 장소를 검색해서 고르고
-// 사업자등록정보로 소유권을 인증하는 방식. 제출하면 서버가 국세청 진위확인을 거쳐 "심사 대기"로 등록하고,
-// 관리자가 최종 승인해야 손님 화면에 노출됨.
+// 매장 인증 신청 — ownerId는 로그인한 계정(카카오)의 id를 그대로 씀.
+// 매장은 손님 화면에 카카오 데이터로 이미 노출되고 있어서, 여기서 하는 건 "내 매장" 소유권 인증뿐임.
+// 카카오맵에 실제로 있는 장소를 검색해서 고르고 사업자등록정보를 제출하면 국세청 진위확인을 거쳐
+// "심사 대기"로 저장되고, 관리자가 최종 승인해야 체크인 승인·리워드 설정 같은 운영 권한이 생김.
 export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
   const [sido, setSido] = useState(SIDO_LIST[0])
   const [gu, setGu] = useState(REGIONS[SIDO_LIST[0]][0])
@@ -139,17 +139,17 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
       const finalStore = croppedBlob ? await uploadStoreThumbnail(store.id, croppedBlob) : store
       onRegistered(finalStore)
     } catch (e) {
-      setError(e.message || "매장 등록 신청에 실패했어요")
+      setError(e.message || "매장 인증 신청에 실패했어요")
       setSubmitting(false)
     }
   }
 
   return (
     <div className="px-5 py-6">
-      <h2 className="mb-1 text-lg font-semibold text-slate-900">매장 등록 신청</h2>
+      <h2 className="mb-1 text-lg font-semibold text-slate-900">매장 인증 신청</h2>
       <p className="mb-4 text-xs text-slate-400">
-        카카오맵에 있는 실제 매장을 검색해서 고르고, 사업자등록정보로 내 매장임을 인증해주세요.
-        국세청 진위확인 통과 후 관리자 승인이 완료되면 손님 화면에 노출돼요.
+        매장은 손님 화면에 이미 노출되고 있어요. 사업자등록정보로 내 매장임을 인증하면
+        체크인 승인·리워드 설정 같은 운영 기능을 쓸 수 있게 돼요. 국세청 진위확인 통과 후 관리자 승인이 필요해요.
       </p>
 
       <div>
@@ -342,7 +342,7 @@ export default function OwnerDashboardScreen({ ownerId, onRegistered }) {
               disabled={!canSubmit}
               className="w-full rounded-xl bg-amber-500 py-3.5 font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
             >
-              {submitting ? "신청 중..." : "등록 신청"}
+              {submitting ? "신청 중..." : "인증 신청"}
             </button>
           </>
         )}

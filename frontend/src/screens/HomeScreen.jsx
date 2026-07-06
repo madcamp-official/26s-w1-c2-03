@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getStores, getCategoryOptions, getAvailableRewards } from "../lib/api"
+import { getNearbyPlaces, searchPlace, getStores, getAvailableRewards } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
-import { storeMatchesQuery } from "../lib/fuzzySearch"
 
-// 카테고리별 기본 이모지 (DB에 이미지 필드가 생기기 전까지 임시로 사용)
 const CATEGORY_EMOJI = {
   카페: "☕",
   한식: "🍚",
@@ -20,41 +18,82 @@ function emojiFor(categories) {
   return CATEGORY_EMOJI[first] || "🍽️"
 }
 
-// 홈 — 지역(시/도·구) 선택 또는 내 위치 기준 + 카테고리 필터
-// 지역 목록은 실제 등록된 매장들의 sido/gu 값에서, 카테고리 목록은 백엔드 /categories에서 실시간으로 가져옴
+const CAT_CHIPS = [
+  { key: "전체", groupCode: null },
+  { key: "음식점", groupCode: "FD6" },
+  { key: "카페", groupCode: "CE7" },
+]
+
+// 홈 — 사장님 등록(인증) 여부와 무관하게 카카오맵 실제 매장을 위치 기반 + 검색으로 보여줌.
+// 우리 DB(getStores)에 이미 있는 매장(누군가 방문했거나 사장님이 인증한 매장)은 스탬프·리워드 표시를 덧입힘.
 export default function HomeScreen({ onSelectStore, myLocation, locating, onLocate, user }) {
-  const [stores, setStores] = useState([])
+  const [places, setPlaces] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const [categoryOptions, setCategoryOptions] = useState([]) // ["카페", "한식", ...]
+  const [ourStoresByPlaceId, setOurStoresByPlaceId] = useState({}) // kakao_place_id -> 우리 DB 매장(id/categories/keywords/image_url)
   const [rewardStoreIds, setRewardStoreIds] = useState(new Set()) // 내가 리워드 수령 가능한 매장 id들
   const [stampsByStore, setStampsByStore] = useState({}) // storeId -> 내 스탬프 개수
 
-  const [sido, setSido] = useState(null)
-  const [gu, setGu] = useState(null)
   const [cat, setCat] = useState("전체")
-  const [nearby, setNearby] = useState(false) // 내 위치 기준 정렬 모드
-  const [query, setQuery] = useState("") // 매장 이름/지역/카테고리/키워드 통합 검색어
+  const [query, setQuery] = useState("")
+  const isSearching = query.trim().length > 0
+
+  // 처음 열었을 때 위치를 못 받아왔으면 한 번 요청 (거부해도 데모 위치로 폴백되니 항상 결과는 나옴)
+  useEffect(() => {
+    if (!myLocation) onLocate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
+    if (!myLocation) return
     setLoading(true)
-    getStores()
+    getNearbyPlaces({ lat: myLocation.lat, lng: myLocation.lng, radius: 3000 })
       .then((data) => {
-        setStores(data)
+        setPlaces(data)
         setError(null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [])
+  }, [myLocation])
 
+  // 검색어를 타이핑하면 잠깐 기다렸다가 카카오 키워드 검색 (위치로 결과를 좁힘)
   useEffect(() => {
-    getCategoryOptions()
-      .then((opts) => setCategoryOptions(opts.map((o) => o.name)))
-      .catch(() => setCategoryOptions([])) // 실패해도 "전체"만으로 화면은 뜨게
+    if (!isSearching) return
+    const timer = setTimeout(() => {
+      setLoading(true)
+      searchPlace(query.trim(), myLocation ? { lat: myLocation.lat, lng: myLocation.lng, radius: 5000 } : {})
+        .then((data) => {
+          setPlaces(data)
+          setError(null)
+        })
+        .catch((err) => setError(err.message))
+        .finally(() => setLoading(false))
+    }, 350)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
+
+  // 검색어를 지우면 다시 주변 목록으로 복귀
+  useEffect(() => {
+    if (isSearching || !myLocation) return
+    getNearbyPlaces({ lat: myLocation.lat, lng: myLocation.lng, radius: 3000 })
+      .then(setPlaces)
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSearching])
+
+  // 우리 DB에 이미 있는 매장(누군가 방문했거나 사장님이 인증한 매장) — 스탬프·카테고리·키워드 덧입히는 용도
+  useEffect(() => {
+    getStores()
+      .then((stores) => {
+        const map = {}
+        for (const s of stores) map[s.kakao_place_id] = s
+        setOurStoresByPlaceId(map)
+      })
+      .catch(() => setOurStoresByPlaceId({}))
   }, [])
 
-  // 내가 스탬프 기준을 달성했지만 아직 못 받은 리워드가 있는 매장들 — 리스트에 "리워드 수령 가능" 표시용
   useEffect(() => {
     if (!user) return
     getAvailableRewards(user.id)
@@ -62,7 +101,6 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .catch(() => setRewardStoreIds(new Set()))
   }, [user?.id])
 
-  // 매장별 내 스탬프 개수 — 리스트에 "방문 N회" 대신 실제 스탬프 개수를 보여주기 위함
   useEffect(() => {
     if (!user) return
     getStampsByStore(user.id)
@@ -70,55 +108,27 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .catch(() => setStampsByStore({}))
   }, [user?.id])
 
-  const catChips = ["전체", ...categoryOptions]
+  // 카카오 결과 + 우리 DB 데이터 병합, 거리 계산, 카테고리 필터
+  const list = useMemo(() => {
+    let merged = places.map((p) => {
+      const ours = ourStoresByPlaceId[p.kakao_place_id]
+      return {
+        ...p,
+        id: ours?.id,
+        categories: ours?.categories?.length ? ours.categories : undefined,
+        keywords: ours?.keywords || [],
+        image_url: ours?.image_url || undefined,
+        distanceKm: myLocation ? haversineKm(myLocation.lat, myLocation.lng, p.lat, p.lng) : null,
+      }
+    })
 
-  // 실제 데이터에 존재하는 시/도 목록 (있는 지역만 노출됨)
-  const sidoList = useMemo(() => {
-    const set = new Set(stores.map((s) => s.sido).filter(Boolean))
-    return Array.from(set).sort()
-  }, [stores])
+    if (cat !== "전체") {
+      const groupCode = CAT_CHIPS.find((c) => c.key === cat)?.groupCode
+      merged = merged.filter((p) => p.category_group_code === groupCode)
+    }
 
-  const guList = useMemo(() => {
-    const set = new Set(stores.filter((s) => s.sido === sido).map((s) => s.gu).filter(Boolean))
-    return Array.from(set).sort()
-  }, [stores, sido])
-
-  useEffect(() => {
-    if (sido || sidoList.length === 0) return
-    setSido(sidoList[0])
-  }, [sidoList, sido])
-
-  useEffect(() => {
-    if (!sido) return
-    if (gu && guList.includes(gu)) return
-    setGu(guList[0] || null)
-  }, [sido, guList, gu])
-
-  const handleSido = (v) => {
-    setSido(v)
-    setGu(null)
-    setNearby(false)
-  }
-  const handleNearby = async () => {
-    const loc = myLocation || (await onLocate())
-    if (loc) setNearby(true)
-  }
-
-  // 검색어가 있으면 지역/카테고리 필터 대신 전체 매장에서 이름·주소·지역·카테고리·키워드를 통합 검색
-  // (이름은 오타/띄어쓰기가 조금 틀려도 비슷하면 걸리도록 fuzzySearch가 처리)
-  const isSearching = query.trim().length > 0
-
-  let list = isSearching
-    ? stores.filter((s) => storeMatchesQuery(s, query))
-    : stores.filter((s) => cat === "전체" || (s.categories || []).includes(cat))
-
-  if (nearby && myLocation) {
-    list = list
-      .map((s) => ({ ...s, distanceKm: haversineKm(myLocation.lat, myLocation.lng, s.lat, s.lng) }))
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-  } else if (!isSearching) {
-    list = list.filter((s) => s.sido === sido && s.gu === gu)
-  }
+    return merged.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
+  }, [places, ourStoresByPlaceId, cat, myLocation])
 
   return (
     <div>
@@ -133,7 +143,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="매장 이름, 지역, 카테고리, 키워드로 검색"
+            placeholder="매장 이름으로 검색"
             className="w-full text-sm text-slate-700 outline-none"
           />
           {isSearching && (
@@ -144,66 +154,33 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         </div>
       </div>
 
-      {!isSearching && (
-      <>
       <div className="flex items-center gap-2 px-5">
-        <select
-          value={sido || ""}
-          onChange={(e) => handleSido(e.target.value)}
-          disabled={sidoList.length === 0}
-          className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm ${nearby ? "text-slate-400" : "text-slate-700"}`}
-        >
-          {sidoList.length === 0 && <option value="">지역 없음</option>}
-          {sidoList.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-        <select
-          value={gu || ""}
-          onChange={(e) => {
-            setGu(e.target.value)
-            setNearby(false)
-          }}
-          disabled={guList.length === 0}
-          className={`rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm ${nearby ? "text-slate-400" : "text-slate-700"}`}
-        >
-          {guList.length === 0 && <option value="">-</option>}
-          {guList.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
         <button
-          onClick={handleNearby}
+          onClick={onLocate}
           disabled={locating}
-          className={`ml-auto whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium ${nearby ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"}`}
+          className="whitespace-nowrap rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600"
         >
-          {locating ? "찾는 중..." : "📍 내 위치"}
+          {locating ? "찾는 중..." : "📍 내 위치 새로고침"}
         </button>
       </div>
 
-      {nearby && myLocation?.isDemo && (
+      {myLocation?.isDemo && (
         <p className="px-5 pt-2 text-xs text-amber-600">
           실제 위치를 못 받아 데모 위치(성수동)로 표시 중이에요.
         </p>
       )}
 
       <div className="mt-3 flex gap-2 overflow-x-auto px-5 pb-4">
-        {catChips.map((c) => (
+        {CAT_CHIPS.map((c) => (
           <button
-            key={c}
-            onClick={() => setCat(c)}
-            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm ${cat === c ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"}`}
+            key={c.key}
+            onClick={() => setCat(c.key)}
+            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm ${cat === c.key ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600"}`}
           >
-            {c}
+            {c.key}
           </button>
         ))}
       </div>
-      </>
-      )}
 
       <div className="space-y-3 px-5">
         {loading && <p className="py-10 text-center text-slate-400">불러오는 중...</p>}
@@ -214,7 +191,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
         {!loading && !error && list.length === 0 && (
           <p className="py-10 text-center text-slate-400">
-            {isSearching ? "검색 결과가 없어요 🥲" : "이 지역엔 아직 등록된 맛집이 없어요 🥲"}
+            {isSearching ? "검색 결과가 없어요 🥲" : "주변에 매장이 없어요 🥲"}
           </p>
         )}
 
@@ -226,7 +203,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
           !error &&
           list.map((s) => (
             <button
-              key={s.id}
+              key={s.kakao_place_id}
               onClick={() => onSelectStore(s)}
               className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
             >
@@ -245,22 +222,26 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
                       📍 {formatDistance(s.distanceKm)}
                     </span>
                   )}
-                  {rewardStoreIds.has(s.id) && (
+                  {s.id && rewardStoreIds.has(s.id) && (
                     <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
                       🎁 리워드 수령 가능
                     </span>
                   )}
                 </div>
                 <p className="text-sm text-slate-500">
-                  {(s.categories || []).join(", ")} · 스탬프 {stampsByStore[s.id] ?? 0}개
+                  {(s.categories || [s.category_hint?.split(" > ").pop()].filter(Boolean)).join(", ")}
+                  {" · 스탬프 "}
+                  {(s.id && stampsByStore[s.id]) ?? 0}개
                 </p>
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {(s.keywords || []).map((k) => (
-                    <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                      #{k}
-                    </span>
-                  ))}
-                </div>
+                {s.keywords.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {s.keywords.map((k) => (
+                      <span key={k} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                        #{k}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <span className="text-slate-300">›</span>
             </button>

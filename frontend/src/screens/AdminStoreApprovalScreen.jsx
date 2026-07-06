@@ -36,9 +36,10 @@ export default function AdminStoreApprovalScreen() {
 
   return (
     <div className="mx-auto max-w-[560px] px-5 py-8">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">🏪 관리자 — 매장 승인</h1>
+      <h1 className="mb-1 text-2xl font-bold text-slate-900">🏪 관리자 — 매장 인증 승인</h1>
       <p className="mb-6 text-sm text-slate-500">
-        국세청 사업자등록정보 진위확인을 통과한 신청 건이에요. 카카오맵 정보와 사업자 정보를 비교해서 최종 승인해주세요.
+        매장은 이미 손님 화면에 노출되고 있어요. 여기서 승인하면 체크인 승인·리워드 설정 같은 운영 권한이
+        그 사장님에게 생겨요. 국세청 사업자등록정보 진위확인을 통과한 신청 건이니 카카오맵 정보와 비교해서 최종 승인해주세요.
       </p>
 
       {error && <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-500">{error}</p>}

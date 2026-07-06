@@ -168,9 +168,39 @@ export function uploadStoreThumbnail(storeId, imageBlob) {
   return requestForm(`/stores/${storeId}/thumbnail`, formData)
 }
 
-// 상호명으로 카카오 장소 검색 (사장님이 직접 주소 안 치고 검색해서 고르는 방식)
-export function searchPlace(query) {
-  return requestJSON(`/kakao/search-place?query=${encodeURIComponent(query)}`)
+// 상호명으로 카카오 장소 검색. lat/lng(+radius, m)를 같이 넘기면 그 주변으로 결과가 좁혀짐
+// (사장님 대시보드의 지역별 검색, 손님 화면의 위치 기반 검색 양쪽에서 재사용)
+export function searchPlace(query, { lat, lng, radius } = {}) {
+  const params = new URLSearchParams({ query })
+  if (lat != null && lng != null) {
+    params.set("lat", lat)
+    params.set("lng", lng)
+    if (radius) params.set("radius", radius)
+  }
+  return requestJSON(`/kakao/search-place?${params.toString()}`)
+}
+
+// 현재 위치 반경 내 실제 매장을 카카오맵에서 바로 가져옴 (음식점+카페) — 사장님 등록 여부와 무관하게 노출
+export function getNearbyPlaces({ lat, lng, radius } = {}) {
+  const params = new URLSearchParams({ lat, lng })
+  if (radius) params.set("radius", radius)
+  return requestJSON(`/kakao/nearby-places?${params.toString()}`)
+}
+
+// 손님이 카카오 검색/주변 결과에서 매장을 열람할 때 호출 — 우리 DB에 없으면 미인증 상태로 새로 만들고,
+// 있으면 그대로 반환. 이후 체크인/랭킹/뱃지는 여기서 받은 store.id로 동작함.
+export function resolveStore({ kakaoPlaceId, name, address, lat, lng, imageUrl }) {
+  return requestJSON("/stores/resolve", {
+    method: "POST",
+    body: JSON.stringify({
+      kakao_place_id: kakaoPlaceId,
+      name,
+      address,
+      lat,
+      lng,
+      image_url: imageUrl,
+    }),
+  })
 }
 
 // 검색 결과로 고른 장소의 카카오맵 대표 이미지 (place_url 필요)

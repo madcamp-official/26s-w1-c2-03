@@ -11,10 +11,12 @@ const STATUS_BADGE = {
 }
 
 // 사장님 모드 — 카카오로 로그인한 계정이면 누구나 진입 가능.
-// "사장님"이라는 별도 자격이 있는 게 아니라, 이 계정(user.id)으로 등록된 매장이 있으면 그게 사장님인 것.
-//   - 매장이 하나도 없으면 → 매장 등록하기 버튼만
-//   - 매장이 있으면 → 가게 목록 + 맨 아래 매장 등록하기 버튼 (여러 개 가능)
-//   - 가게를 누르면 → 그 가게로 온 인증 요청 수락/거절 화면
+// "사장님"이라는 별도 자격이 있는 게 아니라, 이 계정(user.id)으로 인증한 매장이 있으면 그게 사장님인 것.
+// 매장 자체는 손님 화면에 카카오 데이터로 이미 노출되고 있고, 여기서 하는 "인증"은
+// 체크인 승인·리워드 설정 같은 운영 권한을 가져오는 절차일 뿐임.
+//   - 인증한 매장이 하나도 없으면 → 매장 인증하기 버튼만
+//   - 있으면 → 매장 목록(심사 상태 표시) + 맨 아래 매장 인증하기 버튼 (여러 개 가능)
+//   - 매장을 누르면 → 그 매장으로 온 인증 요청 수락/거절 화면
 export default function OwnerApp({ user, onExit }) {
   const [stores, setStores] = useState(null) // null = 로딩 중
   const [selectedStore, setSelectedStore] = useState(null)
@@ -45,7 +47,7 @@ export default function OwnerApp({ user, onExit }) {
   }
 
   const headerSubtitle = showRegisterForm
-    ? "매장 등록"
+    ? "매장 인증"
     : selectedStore
       ? selectedStore.name
       : "사장님 모드"
@@ -92,12 +94,12 @@ export default function OwnerApp({ user, onExit }) {
         ) : stores.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-8 text-center">
             <p className="text-3xl">🏪</p>
-            <p className="mt-3 text-slate-500">아직 등록된 매장이 없어요</p>
+            <p className="mt-3 text-slate-500">아직 인증한 매장이 없어요</p>
             <button
               onClick={() => setShowRegisterForm(true)}
               className="mt-6 w-full rounded-xl bg-amber-500 py-3.5 font-semibold text-white"
             >
-              매장 등록하기
+              매장 인증하기
             </button>
           </div>
         ) : (
@@ -133,7 +135,7 @@ export default function OwnerApp({ user, onExit }) {
               onClick={() => setShowRegisterForm(true)}
               className="mt-6 w-full rounded-xl border border-dashed border-slate-300 py-3.5 font-medium text-slate-500"
             >
-              + 매장 등록하기
+              + 매장 인증하기
             </button>
           </div>
         )}

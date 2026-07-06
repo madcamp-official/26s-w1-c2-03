@@ -1,11 +1,17 @@
-// 카카오맵 버전 MapScreen — 실제 백엔드 API에서 매장 데이터를 가져오고,
-// 지도 중심/줌은 등록된 매장들 범위에 맞춰 자동으로 조정됨 (전국 대응)
+// 카카오맵 버전 MapScreen — 사장님 등록(인증) 여부와 무관하게 카카오맵 실제 매장을 위치 기반 + 검색으로 보여줌.
+// 우리 DB(getStores)에 이미 있는 매장은 스탬프·카테고리 표시를 덧입힘.
 import { useEffect, useRef, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getStores, getCategoryOptions } from "../lib/api"
+import { getNearbyPlaces, searchPlace, getStores } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
 
 const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
+
+const CAT_CHIPS = [
+  { key: "전체", groupCode: null },
+  { key: "음식점", groupCode: "FD6" },
+  { key: "카페", groupCode: "CE7" },
+]
 
 const CATEGORY_EMOJI = {
   카페: "☕",
@@ -70,18 +76,59 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   const didFitBoundsRef = useRef(false)
 
   const [cat, setCat] = useState("전체")
-  const [categoryOptions, setCategoryOptions] = useState([])
+  const [query, setQuery] = useState("")
   const [mapReady, setMapReady] = useState(false)
   const [sdkError, setSdkError] = useState(null)
 
-  const [stores, setStores] = useState([])
+  const [places, setPlaces] = useState([])
   const [loadError, setLoadError] = useState(null)
+  const [ourStoresByPlaceId, setOurStoresByPlaceId] = useState({})
   const [stampsByStore, setStampsByStore] = useState({}) // storeId -> 내 스탬프 개수
+
+  const center = myLocation || FALLBACK_CENTER
+  const isSearching = query.trim().length > 0
+
+  useEffect(() => {
+    if (!myLocation) onLocate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 주변 매장 (검색 중이 아닐 때)
+  useEffect(() => {
+    if (isSearching) return
+    getNearbyPlaces({ lat: center.lat, lng: center.lng, radius: 3000 })
+      .then((data) => {
+        setPlaces(data)
+        setLoadError(null)
+      })
+      .catch((err) => setLoadError(err.message))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myLocation, isSearching])
+
+  // 검색어로 카카오 키워드 검색 (위치로 결과를 좁힘)
+  useEffect(() => {
+    if (!isSearching) return
+    const timer = setTimeout(() => {
+      searchPlace(query.trim(), { lat: center.lat, lng: center.lng, radius: 10000 })
+        .then((data) => {
+          setPlaces(data)
+          setLoadError(null)
+          didFitBoundsRef.current = false // 검색 결과 범위로 다시 맞추기
+        })
+        .catch((err) => setLoadError(err.message))
+    }, 350)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
 
   useEffect(() => {
     getStores()
-      .then(setStores)
-      .catch((err) => setLoadError(err.message))
+      .then((stores) => {
+        const map = {}
+        for (const s of stores) map[s.kakao_place_id] = s
+        setOurStoresByPlaceId(map)
+      })
+      .catch(() => setOurStoresByPlaceId({}))
   }, [])
 
   useEffect(() => {
@@ -91,16 +138,20 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       .catch(() => setStampsByStore({}))
   }, [user?.id])
 
-  useEffect(() => {
-    getCategoryOptions()
-      .then((opts) => setCategoryOptions(opts.map((o) => o.name)))
-      .catch(() => setCategoryOptions([]))
-  }, [])
-
-  const catChips = ["전체", ...categoryOptions]
-  const visibleStores = stores
-    .filter((s) => cat === "전체" || (s.categories || []).includes(cat))
-    .map((s) => ({ ...s, myStampCount: stampsByStore[s.id] ?? 0 }))
+  const visibleStores = places
+    .filter((p) => {
+      const groupCode = CAT_CHIPS.find((c) => c.key === cat)?.groupCode
+      return cat === "전체" || p.category_group_code === groupCode
+    })
+    .map((p) => {
+      const ours = ourStoresByPlaceId[p.kakao_place_id]
+      return {
+        ...p,
+        id: ours?.id,
+        categories: ours?.categories?.length ? ours.categories : undefined,
+        myStampCount: (ours?.id && stampsByStore[ours.id]) ?? 0,
+      }
+    })
 
   useEffect(() => {
     let cancelled = false
@@ -109,7 +160,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
         if (cancelled || !containerRef.current) return
         const map = new kakao.maps.Map(containerRef.current, {
           center: new kakao.maps.LatLng(FALLBACK_CENTER.lat, FALLBACK_CENTER.lng),
-          level: 7,
+          level: 6,
         })
         mapRef.current = map
         setMapReady(true)
@@ -129,7 +180,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
         <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.categories)} ${store.name}</p>
         <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
-          ${(store.categories || []).join(", ")}${(store.myStampCount ?? 0) > 0 ? ` · 스탬프 ${store.myStampCount}개 ✅` : " · 아직 안 감"}
+          ${(store.categories || [store.category_hint?.split(" > ").pop()].filter(Boolean)).join(", ")}${(store.myStampCount ?? 0) > 0 ? ` · 스탬프 ${store.myStampCount}개 ✅` : " · 아직 안 감"}
         </p>
         ${
           myLocation
@@ -191,7 +242,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       didFitBoundsRef.current = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, cat, myLocation, stores])
+  }, [mapReady, cat, places, ourStoresByPlaceId, stampsByStore])
 
   useEffect(() => {
     if (!mapReady || !window.kakao || !myLocation) return
@@ -206,8 +257,10 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     overlay.setMap(map)
     userOverlayRef.current = overlay
 
-    map.setCenter(position)
-    map.setLevel(4)
+    if (!didFitBoundsRef.current) {
+      map.setCenter(position)
+      map.setLevel(4)
+    }
   }, [mapReady, myLocation])
 
   return (
@@ -226,16 +279,32 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
         </div>
       )}
 
-      <div className="absolute inset-x-0 top-0 z-[1000] flex gap-2 overflow-x-auto bg-gradient-to-b from-white/95 to-transparent px-3 py-3">
-        {catChips.map((c) => (
-          <button
-            key={c}
-            onClick={() => setCat(c)}
-            className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm shadow-sm ${cat === c ? "bg-amber-500 text-white" : "bg-white text-slate-600"}`}
-          >
-            {c}
-          </button>
-        ))}
+      <div className="absolute inset-x-0 top-0 z-[1000] bg-gradient-to-b from-white/95 to-transparent px-3 pt-3 pb-2">
+        <div className="mb-2 flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-sm">
+          <span className="text-slate-400">🔍</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="매장 이름으로 검색"
+            className="w-full text-sm text-slate-700 outline-none"
+          />
+          {isSearching && (
+            <button onClick={() => setQuery("")} className="text-slate-300">
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2 overflow-x-auto">
+          {CAT_CHIPS.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => setCat(c.key)}
+              className={`whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm shadow-sm ${cat === c.key ? "bg-amber-500 text-white" : "bg-white text-slate-600"}`}
+            >
+              {c.key}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="pointer-events-none absolute bottom-8 left-3 z-[1000] rounded-xl bg-white/95 px-3 py-2 shadow-md">
@@ -250,7 +319,10 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
       </div>
 
       <button
-        onClick={onLocate}
+        onClick={() => {
+          didFitBoundsRef.current = false
+          onLocate()
+        }}
         disabled={locating}
         className="absolute bottom-8 right-3 z-[1000] rounded-full bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-lg"
       >

@@ -1,3 +1,4 @@
+import asyncio
 import re
 import uuid
 from typing import Optional
@@ -17,17 +18,53 @@ router = APIRouter()
 
 @router.get("/stores")
 def get_stores(owner_id: Optional[str] = None, status: Optional[str] = None):
+    # 손님 화면은 이제 이 API로 매장을 찾지 않음 — /kakao/nearby-places, /kakao/search-place로 카카오 데이터를
+    # 직접 보여주고, 매장을 열 때 /stores/resolve로 우리 DB 행을 만들거나 찾아옴.
+    # 이 API는 사장님 대시보드(owner_id로 내 매장 전체 조회)와 관리자 승인 목록(status로 조회)에서만 사용.
     db = require_supabase()
     query = db.table("stores").select("*")
     if owner_id:
         query = query.eq("owner_id", owner_id)
     if status:
         query = query.eq("status", status)
-    elif not owner_id:
-        # 손님 화면(지도/홈 등)은 owner_id도 status도 안 넘기는 기본 조회 — 승인된 매장만 보여줌
-        query = query.eq("status", "approved")
     result = safe_execute(query, "매장 목록 조회 실패")
     return result.data
+
+
+class StoreResolve(BaseModel):
+    kakao_place_id: str
+    name: str
+    address: str
+    lat: float
+    lng: float
+    image_url: Optional[str] = None
+
+
+@router.post("/stores/resolve")
+def resolve_store(payload: StoreResolve):
+    """
+    손님이 카카오 검색/주변 결과에서 매장을 열람(상세보기·체크인)할 때 호출.
+    우리 DB에 이미 있으면 그대로 반환하고, 없으면 사장님 인증 전 "미인증(unclaimed)" 상태로 새로 만들어서
+    스탬프·랭킹·뱃지 같은 게임 기능이 사장님 등록 여부와 무관하게 바로 동작하게 함.
+    """
+    db = require_supabase()
+    existing = safe_execute(
+        db.table("stores").select("*").eq("kakao_place_id", payload.kakao_place_id), "매장 조회 실패"
+    )
+    if existing.data:
+        return existing.data[0]
+
+    row = {
+        "name": payload.name.strip(),
+        "address": payload.address.strip(),
+        "kakao_place_id": payload.kakao_place_id,
+        "image_url": payload.image_url,
+        "status": "unclaimed",
+        "lat": payload.lat,
+        "lng": payload.lng,
+    }
+    result = safe_execute(db.table("stores").insert(row), "매장 생성 실패")
+    return result.data[0]
 
 
 class StoreCreate(BaseModel):
@@ -117,13 +154,13 @@ async def geocode_address(address: str) -> dict:
     return {"lat": lat, "lng": lng, "sido": sido, "gu": gu}
 
 
-def _normalize(text: str) -> str:
-    # 중복 비교용 — 공백 차이(예: "테스트1" vs "테스트 1")를 무시하기 위해 공백을 전부 제거
-    return "".join(text.split())
-
-
 @router.post("/stores")
 async def create_store(payload: StoreCreate):
+    """
+    매장 "인증" 신청 — 카카오 장소검색으로 고른 실제 매장에 사업자등록정보로 소유권을 주장.
+    이제 매장 노출 여부와는 무관함(손님은 /kakao/nearby-places, /kakao/search-place로 이미 다 볼 수 있음).
+    이 신청은 오직 "체크인 승인/리워드 설정 같은 운영 권한을 이 사장님에게 줄지"만 결정함.
+    """
     if payload.keywords and len(payload.keywords) > MAX_STORE_KEYWORDS:
         raise HTTPException(status_code=422, detail=f"키워드는 최대 {MAX_STORE_KEYWORDS}개까지 선택할 수 있어요.")
 
@@ -142,23 +179,17 @@ async def create_store(payload: StoreCreate):
 
     db = require_supabase()
 
-    # 중복 등록 차단 (반려된 신청은 재신청할 수 있게 제외)
-    # 1순위: 카카오 장소 ID로 비교 — 카카오맵상 실제로 같은 장소인지 정확히 판별
-    # 2순위: 이름·주소를 공백 무시하고 비교 (표기 차이 방지)
+    # 손님이 먼저 열람해서 "미인증" 상태로 이미 만들어져 있을 수도 있고, 처음 인증하는 매장일 수도 있음.
     existing = safe_execute(
-        db.table("stores").select("id, name, address, kakao_place_id").neq("status", "rejected"),
-        "중복 매장 확인 실패",
+        db.table("stores").select("id, owner_id, status").eq("kakao_place_id", payload.kakao_place_id),
+        "매장 조회 실패",
     )
-    for store in existing.data:
-        if store.get("kakao_place_id") == payload.kakao_place_id:
-            raise HTTPException(status_code=409, detail="이미 등록(신청)된 매장이에요 (카카오맵상 동일 장소).")
-        if _normalize(store["name"]) == _normalize(name) and _normalize(store["address"]) == _normalize(address):
-            raise HTTPException(status_code=409, detail="이미 등록(신청)된 매장이에요 (같은 이름·주소).")
+    existing_store = existing.data[0] if existing.data else None
+    if existing_store and existing_store["status"] in ("pending", "approved") and existing_store["owner_id"] != payload.owner_id:
+        raise HTTPException(status_code=409, detail="이미 다른 사장님이 인증했거나 심사 중인 매장이에요.")
 
-    # 국세청 사업자등록정보 진위확인 — 번호·대표자명·개업일자가 실제로 일치해야 통과 (여기서 걸러지지 않으면 관리자 심사로 넘어감)
+    # 국세청 사업자등록정보 진위확인 — 번호·대표자명·개업일자가 실제로 일치해야 통과
     await verify_business_registration(b_no, p_nm, start_dt)
-
-    geo = await geocode_address(address)
 
     # owner_id는 이제 카카오로 로그인한 users.id를 그대로 씀 (별도 사장님 회원가입 없음).
     # stores.owner_id는 owners 테이블을 참조하므로, 아직 owners에 같은 id가 없으면 먼저 만들어줌
@@ -175,19 +206,22 @@ async def create_store(payload: StoreCreate):
         "address": address,
         "categories": payload.categories,
         "keywords": payload.keywords,
-        "image_url": payload.image_url,
         "kakao_place_id": payload.kakao_place_id,
         "business_registration_number": b_no,
         "business_owner_name": p_nm,
         "business_start_date": start_dt,
-        "status": "pending",  # 국세청 진위확인을 통과해도 관리자 최종 승인 전까지는 손님 화면에 노출 안 됨
-        "lat": geo["lat"],
-        "lng": geo["lng"],
-        "sido": geo["sido"],
-        "gu": geo["gu"],
+        "status": "pending",  # 관리자 최종 승인 전까지 체크인 승인·리워드 설정 같은 운영 권한만 보류됨 (노출은 이미 되고 있음)
     }
+    if payload.image_url:
+        row["image_url"] = payload.image_url
 
-    result = db.table("stores").insert(row).execute()
+    if existing_store:
+        result = safe_execute(db.table("stores").update(row).eq("id", existing_store["id"]), "매장 인증 신청 실패")
+    else:
+        geo = await geocode_address(address)
+        row.update({"lat": geo["lat"], "lng": geo["lng"], "sido": geo["sido"], "gu": geo["gu"]})
+        result = safe_execute(db.table("stores").insert(row), "매장 인증 신청 실패")
+
     return result.data[0]
 
 
@@ -197,13 +231,22 @@ class StoreReview(BaseModel):
 
 @router.patch("/stores/{store_id}/review")
 def review_store(store_id: str, payload: StoreReview):
-    # 관리자 — 사업자 진위확인을 통과한 매장 등록 신청을 최종 승인/반려
+    # 관리자 — 사업자 진위확인을 통과한 인증 신청을 최종 승인/반려
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(status_code=422, detail="status는 approved 또는 rejected여야 합니다.")
     db = require_supabase()
-    result = safe_execute(
-        db.table("stores").update({"status": payload.status}).eq("id", store_id), "매장 심사 처리 실패"
-    )
+    if payload.status == "approved":
+        update_row = {"status": "approved"}
+    else:
+        # 반려되면 소유권 정보를 지우고 미인증 상태로 되돌려서 다른 사장님도 다시 신청할 수 있게 함
+        update_row = {
+            "status": "unclaimed",
+            "owner_id": None,
+            "business_registration_number": None,
+            "business_owner_name": None,
+            "business_start_date": None,
+        }
+    result = safe_execute(db.table("stores").update(update_row).eq("id", store_id), "매장 심사 처리 실패")
     if not result.data:
         raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")
     return result.data[0]
@@ -239,12 +282,25 @@ async def upload_store_thumbnail(store_id: str, image: UploadFile = File(...)):
     return result.data[0]
 
 
+def _normalize_kakao_doc(doc: dict) -> dict:
+    return {
+        "kakao_place_id": doc.get("id"),
+        "name": doc.get("place_name"),
+        "address": doc.get("road_address_name") or doc.get("address_name"),
+        "category_hint": doc.get("category_name"),
+        "category_group_code": doc.get("category_group_code") or None,  # FD6(음식점) / CE7(카페) — 손님 화면 카테고리 필터용
+        "phone": doc.get("phone") or None,
+        "place_url": doc.get("place_url"),  # 카카오맵 상세 페이지 — 대표 이미지 자동으로 가져올 때 사용
+        "lat": float(doc["y"]),
+        "lng": float(doc["x"]),
+    }
+
+
 @router.get("/kakao/search-place")
-async def search_place(query: str):
+async def search_place(query: str, lat: Optional[float] = None, lng: Optional[float] = None, radius: Optional[int] = None):
     """
-    상호명으로 카카오 장소를 검색 (사장님 대시보드에서 매장 자동 등록용).
-    주소 검색(geocode_address)과 달리 이름만 알아도 검색 가능하고,
-    카테고리/전화번호까지 같이 돌려줌.
+    상호명으로 카카오 장소를 검색. lat/lng(+radius, 미터)를 같이 넘기면 그 주변으로 결과를 좁힘.
+    사장님 대시보드(지역 선택 후 검색)와 손님 화면(위치 기반 검색) 양쪽에서 재사용.
     """
     if not KAKAO_REST_API_KEY:
         raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
@@ -252,6 +308,11 @@ async def search_place(query: str):
     url = "https://dapi.kakao.com/v2/local/search/keyword.json"
     headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
     params = {"query": query}
+    if lat is not None and lng is not None:
+        params["x"] = lng
+        params["y"] = lat
+        if radius:
+            params["radius"] = max(1, min(radius, 20000))
 
     async with httpx.AsyncClient() as client:
         res = await client.get(url, headers=headers, params=params)
@@ -259,19 +320,45 @@ async def search_place(query: str):
     if res.status_code != 200:
         raise HTTPException(status_code=502, detail=f"카카오 장소 검색 실패 (status {res.status_code})")
 
-    data = res.json()
+    return [_normalize_kakao_doc(doc) for doc in res.json().get("documents", [])]
+
+
+async def _kakao_category_search(category_group_code: str, lat: float, lng: float, radius: int) -> list[dict]:
+    url = "https://dapi.kakao.com/v2/local/search/category.json"
+    headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
+    params = {"category_group_code": category_group_code, "x": lng, "y": lat, "radius": radius, "sort": "distance"}
+
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers=headers, params=params)
+
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"카카오 주변 매장 조회 실패 (status {res.status_code})")
+    return res.json().get("documents", [])
+
+
+@router.get("/kakao/nearby-places")
+async def get_nearby_places(lat: float, lng: float, radius: int = 3000):
+    """
+    현재 위치 반경 내 실제 매장을 카카오맵에서 바로 가져옴 (음식점 FD6 + 카페 CE7 합쳐서 거리순).
+    사장님이 인증하지 않은 매장도 손님 화면에 그대로 노출하기 위한 용도. radius 단위는 미터, 최대 20km.
+    """
+    if not KAKAO_REST_API_KEY:
+        raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
+    radius = max(1, min(radius, 20000))
+
+    food_docs, cafe_docs = await asyncio.gather(
+        _kakao_category_search("FD6", lat, lng, radius),
+        _kakao_category_search("CE7", lat, lng, radius),
+    )
+
+    seen = set()
     results = []
-    for doc in data.get("documents", []):
-        results.append({
-            "kakao_place_id": doc.get("id"),
-            "name": doc.get("place_name"),
-            "address": doc.get("road_address_name") or doc.get("address_name"),
-            "category_hint": doc.get("category_name"),  # 참고용 — 우리 카테고리 칩과 자동 매칭 안 됨, 사장님이 직접 선택
-            "phone": doc.get("phone") or None,
-            "place_url": doc.get("place_url"),  # 카카오맵 상세 페이지 — 대표 이미지 자동으로 가져올 때 사용
-            "lat": float(doc["y"]),
-            "lng": float(doc["x"]),
-        })
+    for doc in food_docs + cafe_docs:
+        place_id = doc.get("id")
+        if place_id in seen:
+            continue
+        seen.add(place_id)
+        results.append(_normalize_kakao_doc(doc))
     return results
 
 
