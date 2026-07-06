@@ -223,16 +223,30 @@ export function getAvailableRewards(userId) {
   return requestJSON(`/users/${userId}/available-rewards`)
 }
 
-// 유저가 이미 받은 리워드 id 목록 (사장님 인증 수락 화면에서 중복 지급 방지용으로 사용)
+// 유저가 요청했거나 받은 리워드 목록 [{reward_id, status}] — 매장 상세에서 버튼 상태(수령하기/요청됨/받음) 표시용
 export function getUserRewardClaims(userId) {
   return requestJSON(`/users/${userId}/reward-claims`)
 }
 
-// 리워드 지급 처리 (사장님 인증 수락 화면의 "지급하기")
+// 리워드 수령 요청 (매장 상세의 "수령하기" 버튼) — 사장님 승인 전까지 pending 상태로 대기
 export function claimReward({ rewardId, userId }) {
   return requestJSON(`/rewards/${rewardId}/claim`, {
     method: "POST",
     body: JSON.stringify({ user_id: userId }),
+  })
+}
+
+// 매장에 걸린 리워드 수령 요청 목록 (사장님 화면) — status 안 넘기면 전체, "pending" 넘기면 대기 중인 것만
+export function getStoreRewardRequests(storeId, status) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : ""
+  return requestJSON(`/stores/${storeId}/reward-requests${query}`)
+}
+
+// 리워드 수령 요청 승인/거절 (사장님 화면) — action: 'approve' | 'reject'
+export function reviewRewardRequest({ userRewardId, action }) {
+  return requestJSON(`/user-rewards/${userRewardId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ action }),
   })
 }
 
