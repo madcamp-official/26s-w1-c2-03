@@ -1,7 +1,7 @@
 // 매장 상세 — 정보 + 내 스탬프 + 인증 버튼 + 방문 랭킹 + 리워드
 // 리워드는 아직 백엔드에 없어서, 데이터가 있을 때만 섹션을 보여줌 (없으면 숨김, 크래시 방지)
 import { useEffect, useState } from "react"
-import { getStoreRanking, getStorePhotos } from "../lib/api"
+import { getStoreRanking, getStorePhotos, getCheckins } from "../lib/api"
 
 const CATEGORY_EMOJI = {
   카페: "☕",
@@ -18,10 +18,11 @@ function emojiFor(categories) {
   return CATEGORY_EMOJI[first] || "🍽️"
 }
 
-export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectProfile }) {
+export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSelectProfile }) {
   const [ranking, setRanking] = useState(null)
   const [photos, setPhotos] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null) // 크게 보기용으로 고른 사진
+  const [myStamps, setMyStamps] = useState(0)
 
   useEffect(() => {
     if (!store) return
@@ -34,6 +35,15 @@ export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectPr
       .then(setPhotos)
       .catch(() => setPhotos([]))
   }, [store?.id])
+
+  // 이 매장에서 내가 승인받은 체크인들의 스탬프 개수 합 (매장 목록 API엔 안 들어있어서 따로 조회)
+  useEffect(() => {
+    if (!store || !user) return
+    setMyStamps(0)
+    getCheckins({ storeId: store.id, userId: user.id, status: "approved" })
+      .then((checkins) => setMyStamps(checkins.reduce((sum, c) => sum + (c.stamp_count ?? 1), 0)))
+      .catch(() => setMyStamps(0))
+  }, [store?.id, user?.id])
 
   if (!store) return null
 
@@ -81,7 +91,7 @@ export default function StoreDetailScreen({ store, onBack, onCheckin, onSelectPr
         <div className="mt-5 rounded-2xl bg-amber-500 p-4 text-white">
           <p className="text-sm opacity-90">내 스탬프</p>
           <p className="text-2xl font-bold">
-            {store.myStamps ?? 0}개
+            {myStamps}개
             {store.myRank ? ` · 현재 ${store.myRank}위 🏅` : ""}
           </p>
         </div>

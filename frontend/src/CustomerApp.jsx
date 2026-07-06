@@ -203,6 +203,7 @@ export default function CustomerApp({ onGoOwner }) {
         {screen === "detail" && (
           <StoreDetailScreen
             store={selectedStore}
+            user={user}
             onBack={() => setScreen(prevScreen)}
             onCheckin={openCheckinFromDetail}
             onSelectProfile={openProfile}
