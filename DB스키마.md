@@ -118,32 +118,31 @@ users ──< reviews >── stores
 | badge_id | uuid | 어떤 뱃지 (→ badges) |
 | earned_at | timestamptz | 획득 시각 |
 
-### rewards (사장님이 등록한 혜택)
+### rewards (사장님이 설정한 리워드 기준 — 스탬프 개수 달성형)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | uuid | 고유 번호 |
 | store_id | uuid | 어느 매장 (→ stores) |
-| title | text | 혜택 이름 (예: 아메리카노 무료) |
-| description | text | 설명 |
-| type | text | instant_stamp(즉시형) / monthly_rank(월별랭킹) |
-| stamp_goal | int | 즉시형: 스탬프 N개 모으면 |
-| rank_threshold | int | 랭킹형: 상위 N위까지 |
-| is_active | boolean | 진행 중 여부 |
+| stamp_threshold | int | 이 매장에서 스탬프 몇 개를 모아야 하는지 |
+| target_type | text | menu(메뉴) / goods(굿즈) |
+| target_name | text | 사장님이 입력한 메뉴·굿즈 이름 (예: 아메리카노, 텀블러) |
+| reward_kind | text | free(메뉴는 "무료", 굿즈는 "증정") / discount(할인) |
+| discount_percent | int | reward_kind가 discount일 때만 사용하는 할인율 |
 | created_at | timestamptz | 등록 시각 |
 
 ---
 
 ## 3. 보조 테이블
 
-### user_rewards (발급된 쿠폰)
+### user_rewards (리워드 지급 기록 — 사장님이 인증 수락 화면에서 지급 처리하면 생김)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | uuid | 고유 번호 |
 | user_id | uuid | 누가 (→ users) |
 | reward_id | uuid | 어떤 리워드 (→ rewards) |
-| status | text | issued(발급) / used(사용완료) |
-| issued_at | timestamptz | 발급 시각 |
-| used_at | timestamptz | 사용 시각 |
+| claimed_at | timestamptz | 지급된 시각 |
+
+> user_id + reward_id는 유니크 — 같은 리워드를 같은 유저에게 두 번 지급 못 하게 막음.
 
 ### reviews (자체 리뷰 — 리뷰왕 칭호용)
 | 컬럼 | 타입 | 설명 |
@@ -275,28 +274,33 @@ create table user_badges (
   unique (user_id, badge_id)
 );
 
--- 7. 사장님 리워드
+-- 7. 사장님 리워드 (스탬프 개수 달성형)
 create table rewards (
   id uuid primary key default gen_random_uuid(),
-  store_id uuid references stores(id),
-  title text not null,
-  description text,
-  type text,                        -- instant_stamp / monthly_rank
-  stamp_goal int,
-  rank_threshold int,
-  is_active boolean default true,
+  store_id uuid references stores(id) on delete cascade,
+  stamp_threshold int not null,      -- 스탬프 몇 개 모으면
+  target_type text not null,         -- 'menu' | 'goods'
+  target_name text not null,         -- 사장님이 입력한 메뉴/굿즈 이름
+  reward_kind text not null,         -- 'free' | 'discount'
+  discount_percent int,              -- reward_kind='discount'일 때만
   created_at timestamptz default now()
 );
 
--- 8. 발급된 쿠폰
+-- 8. 리워드 지급 기록 (사장님이 인증 수락 화면에서 지급 처리)
 create table user_rewards (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references users(id),
-  reward_id uuid references rewards(id),
-  status text default 'issued',     -- issued / used
-  issued_at timestamptz default now(),
-  used_at timestamptz
+  reward_id uuid references rewards(id) on delete cascade,
+  claimed_at timestamptz default now(),
+  unique (user_id, reward_id)
 );
+
+-- ⚠️ [아직 실행 안 함 — 리워드 기능 쓰려면 지금 Supabase SQL Editor에서 실행]
+-- 기존 rewards/user_rewards는 옛날 설계(title/type/stamp_goal 등)라 실제로 쓴 적 없는 빈 테이블임 —
+-- 안전하게 지우고 위 7·8번 새 스키마로 다시 만듦.
+drop table if exists user_rewards;
+drop table if exists rewards;
+-- (위에서 이미 정의한 create table rewards(...), create table user_rewards(...) 를 여기서 다시 실행)
 
 -- 9. 자체 리뷰
 create table reviews (

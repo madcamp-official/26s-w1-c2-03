@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from deps import supabase
-from routers import auth, badges, checkins, options, stores
+from routers import auth, badges, checkins, options, rewards, stores
 
 app = FastAPI(title="맛짱(Matzzang) API")
 
@@ -20,6 +20,7 @@ app.include_router(options.router)
 app.include_router(auth.router)
 app.include_router(checkins.router)
 app.include_router(badges.router)
+app.include_router(rewards.router)
 
 
 @app.get("/health")
