@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
-import { getUserBadges, getCheckins } from "../lib/api"
+import { getUserBadges, getCheckins, getUserCategoryTiers } from "../lib/api"
 import StomachMap from "../components/StomachMap"
+import TierBadge from "../components/TierBadge"
 
 // 카테고리별 기본 이모지 (HomeScreen과 동일한 매핑)
 const CATEGORY_EMOJI = {
@@ -21,6 +22,7 @@ function emojiFor(category) {
 export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenStore, onEditProfile, onDeleteAccount }) {
   const [badges, setBadges] = useState(null)
   const [checkins, setCheckins] = useState(null)
+  const [categoryTiers, setCategoryTiers] = useState(null)
   const [sortBy, setSortBy] = useState("recent") // recent | frequent
 
   useEffect(() => {
@@ -30,6 +32,9 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
     getCheckins({ userId: user.id, status: "approved" })
       .then(setCheckins)
       .catch(() => setCheckins([]))
+    getUserCategoryTiers(user.id)
+      .then(setCategoryTiers)
+      .catch(() => setCategoryTiers([]))
   }, [user.id])
 
   // 승인된 체크인을 매장별로 묶어서 방문 횟수·최근 방문일 계산 (더미 데이터 없이 실제 방문만)
@@ -85,6 +90,30 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
             </button>
           )}
         </div>
+
+        {/* 카테고리별 티어 — 매장이 아니라 카테고리 단위 (한식 브론즈, 일식 실버 같은 식). 리그오브레전드 랭크 토큰 참고 */}
+        <section className="mt-6">
+          <h3 className="mb-3 font-semibold text-slate-900">카테고리별 티어</h3>
+          {categoryTiers === null ? (
+            <p className="text-sm text-slate-400">불러오는 중...</p>
+          ) : categoryTiers.length === 0 ? (
+            <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
+              스탬프를 모으면 카테고리별로 티어가 생겨요!
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {categoryTiers.map((t) => (
+                <TierBadge
+                  key={t.category}
+                  tier={t.tier}
+                  emoji={emojiFor(t.category)}
+                  label={t.category}
+                  totalStamps={t.total_stamps}
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* 내 위장 지도 — 자주 간 매장일수록 크게. 여태 방문한 매장 전체를 위장 실루엣에 채움 */}
         <section className="mt-6">

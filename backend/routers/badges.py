@@ -140,3 +140,93 @@ def delete_badge(badge_id: str):
     if not result.data:
         raise HTTPException(status_code=404, detail="뱃지를 찾을 수 없습니다.")
     return {"deleted": True}
+
+
+# ---------------------------------------------------------------------
+# 스탬프 티어 (매장이 아니라 카테고리 단위 — 한식 브론즈, 일식 실버 같은 식)
+# 브론즈~다이아몬드는 해당 카테고리 누적 스탬프 개수 기준, 챌린저는 그중 카테고리 내 상위 10명
+# ---------------------------------------------------------------------
+
+CATEGORY_TIER_THRESHOLDS = [
+    ("diamond", 25),
+    ("platinum", 15),
+    ("gold", 10),
+    ("silver", 5),
+    ("bronze", 1),
+]
+
+
+def _tier_for(total: int, is_top10: bool) -> Optional[str]:
+    if total >= 25 and is_top10:
+        return "challenger"
+    for tier, threshold in CATEGORY_TIER_THRESHOLDS:
+        if total >= threshold:
+            return tier
+    return None
+
+
+def _fetch_approved_checkins_with_categories(db):
+    return safe_execute(
+        db.table("checkins")
+        .select("user_id, stamp_count, users(nickname, profile_image_url), stores(categories)")
+        .eq("status", "approved"),
+        "체크인 조회 실패",
+    ).data
+
+
+def _category_totals(checkins):
+    """체크인 목록 → {카테고리: {user_id: 누적 스탬프}} (매장이 여러 카테고리면 각 카테고리에 모두 반영)"""
+    totals: dict[str, dict[str, int]] = {}
+    for c in checkins:
+        store = c.get("stores") or {}
+        stamps = c.get("stamp_count") or 1
+        uid = c["user_id"]
+        for category in store.get("categories") or []:
+            totals.setdefault(category, {})
+            totals[category][uid] = totals[category].get(uid, 0) + stamps
+    return totals
+
+
+@router.get("/leaderboard/stamps")
+def get_stamp_leaderboard(category: str, limit: int = 10):
+    """
+    카테고리별 누적 스탬프 순위표.
+    프론트가 이 목록에 내 user_id가 있는지로 "챌린저" 자격(카테고리 내 상위 N명)을 판단함.
+    """
+    db = require_supabase()
+    checkins = _fetch_approved_checkins_with_categories(db)
+
+    info: dict[str, dict] = {}
+    for c in checkins:
+        u = c.get("users") or {}
+        info[c["user_id"]] = {"nickname": u.get("nickname"), "profile_image_url": u.get("profile_image_url")}
+
+    totals = _category_totals(checkins).get(category, {})
+    ranking = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[: max(1, min(limit, 100))]
+    return [
+        {
+            "user_id": uid,
+            "nickname": info.get(uid, {}).get("nickname"),
+            "profile_image_url": info.get(uid, {}).get("profile_image_url"),
+            "total_stamps": total,
+        }
+        for uid, total in ranking
+    ]
+
+
+@router.get("/users/{user_id}/category-tiers")
+def get_user_category_tiers(user_id: str):
+    """유저가 스탬프를 하나라도 모은 카테고리별 티어 목록 (예: 한식 브론즈, 일식 실버)."""
+    db = require_supabase()
+    totals_by_category = _category_totals(_fetch_approved_checkins_with_categories(db))
+
+    tiers = []
+    for category, totals in totals_by_category.items():
+        total = totals.get(user_id, 0)
+        if total <= 0:
+            continue
+        top10_ids = {uid for uid, _ in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:10]}
+        tiers.append({"category": category, "total_stamps": total, "tier": _tier_for(total, user_id in top10_ids)})
+
+    tiers.sort(key=lambda t: t["total_stamps"], reverse=True)
+    return tiers

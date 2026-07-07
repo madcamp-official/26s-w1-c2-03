@@ -7,6 +7,8 @@ function rewardLabel(r) {
   return r.target_type === "menu" ? `${r.target_name} 무료` : `${r.target_name} 증정`
 }
 
+const MAX_STAMP_COUNT = 3 // 백엔드 review_checkin과 동일한 상한 (checkins.py)
+
 // 사장님 — 이 매장(storeId)에 온 방문 인증 요청 + 리워드 수령 요청을 실제 백엔드에서 불러와 수락/거절
 export default function OwnerCheckinsScreen({ storeId }) {
   const [checkins, setCheckins] = useState(null) // null = 로딩 중
@@ -35,7 +37,10 @@ export default function OwnerCheckinsScreen({ storeId }) {
 
   const getStampCount = (checkinId) => stampCounts[checkinId] ?? 1
   const changeStampCount = (checkinId, delta) => {
-    setStampCounts((prev) => ({ ...prev, [checkinId]: Math.max(1, (prev[checkinId] ?? 1) + delta) }))
+    setStampCounts((prev) => ({
+      ...prev,
+      [checkinId]: Math.min(MAX_STAMP_COUNT, Math.max(1, (prev[checkinId] ?? 1) + delta)),
+    }))
   }
 
   const review = async (checkinId, status) => {

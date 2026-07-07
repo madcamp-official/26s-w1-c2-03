@@ -349,6 +349,16 @@ export function getUserBadges(userId) {
   return requestJSON(`/users/${userId}/badges`)
 }
 
+// 카테고리별 누적 스탬프 순위표 — 챌린저 티어(카테고리 내 상위 N명) 판정에 사용
+export function getStampLeaderboard(category, limit = 10) {
+  return requestJSON(`/leaderboard/stamps?category=${encodeURIComponent(category)}&limit=${limit}`)
+}
+
+// 내 카테고리별 티어 (매장이 아니라 카테고리 단위 — 한식 브론즈, 일식 실버 같은 식)
+export function getUserCategoryTiers(userId) {
+  return requestJSON(`/users/${userId}/category-tiers`)
+}
+
 // 관리자 — 뱃지 생성 (이모지 또는 이미지 + 조건 여러 개)
 export function createBadge({ name, description, emoji, conditions, imageBlob }) {
   const formData = new FormData()

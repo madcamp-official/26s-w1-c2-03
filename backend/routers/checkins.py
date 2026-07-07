@@ -72,17 +72,20 @@ async def create_checkin(
     return result.data[0]
 
 
+MAX_STAMP_COUNT = 3  # 사장님이 체크인 1건 승인할 때 한 번에 줄 수 있는 스탬프 개수 상한 (티어 인플레 방지)
+
+
 class CheckinReview(BaseModel):
     status: str  # 'approved' | 'rejected'
-    stamp_count: int = 1  # 수락할 때만 의미 있음 — 사장님이 +/-로 정한 스탬프 개수 (기본 1)
+    stamp_count: int = 1  # 수락할 때만 의미 있음 — 사장님이 +/-로 정한 스탬프 개수 (기본 1, 최대 3)
 
 
 @router.patch("/checkins/{checkin_id}")
 def review_checkin(checkin_id: str, payload: CheckinReview):
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(status_code=422, detail="status는 approved 또는 rejected 여야 합니다.")
-    if payload.stamp_count < 1:
-        raise HTTPException(status_code=422, detail="스탬프 개수는 1개 이상이어야 합니다.")
+    if not (1 <= payload.stamp_count <= MAX_STAMP_COUNT):
+        raise HTTPException(status_code=422, detail=f"스탬프 개수는 1~{MAX_STAMP_COUNT}개 사이여야 합니다.")
 
     update_row = {"status": payload.status, "reviewed_at": "now()"}
     if payload.status == "approved":
