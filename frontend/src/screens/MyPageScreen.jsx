@@ -91,15 +91,14 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
           )}
         </div>
 
-        {/* 카테고리별 티어 — 매장이 아니라 카테고리 단위 (한식 브론즈, 일식 실버 같은 식). 리그오브레전드 랭크 토큰 참고 */}
+        {/* 내 맛집 티어표 — 매장이 아니라 카테고리 단위 (한식 브론즈, 일식 실버 같은 식). 아직 브론즈 전이면 잠긴 브론즈로 흐리게 */}
         <section className="mt-6">
-          <h3 className="mb-3 font-semibold text-slate-900">카테고리별 티어</h3>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h3 className="font-semibold text-slate-900">내 맛집 티어표</h3>
+            <span className="text-xs text-slate-400">카테고리마다 스탬프를 모아 티어를 올려보세요</span>
+          </div>
           {categoryTiers === null ? (
             <p className="text-sm text-slate-400">불러오는 중...</p>
-          ) : categoryTiers.length === 0 ? (
-            <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
-              스탬프를 모으면 카테고리별로 티어가 생겨요!
-            </p>
           ) : (
             <div className="flex flex-wrap gap-3">
               {categoryTiers.map((t) => (

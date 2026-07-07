@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { createBadge, getBadges, deleteBadge, getCategoryOptions, getKeywordOptions } from "../lib/api"
+import { createBadge, getBadges, deleteBadge, getKeywordOptions } from "../lib/api"
 import ImageCropper from "../components/ImageCropper"
 
 const QUICK_EMOJIS = ["🏆", "☕", "🍰", "🍚", "🍻", "🌅", "✍️", "🧭", "💻", "🏙️", "🍜", "🔥"]
@@ -26,7 +26,6 @@ export default function AdminBadgeScreen() {
   const [success, setSuccess] = useState(null)
 
   const [badgeList, setBadgeList] = useState(null)
-  const [categoryOptions, setCategoryOptions] = useState([])
   const [keywordOptions, setKeywordOptions] = useState([])
 
   const loadBadges = () => {
@@ -37,9 +36,6 @@ export default function AdminBadgeScreen() {
   useEffect(loadBadges, [])
 
   useEffect(() => {
-    getCategoryOptions()
-      .then((options) => setCategoryOptions(options.map((o) => o.name)))
-      .catch(() => setCategoryOptions([]))
     getKeywordOptions()
       .then((options) => setKeywordOptions(options.map((o) => o.name)))
       .catch(() => setKeywordOptions([]))
@@ -118,7 +114,8 @@ export default function AdminBadgeScreen() {
     <div className="mx-auto max-w-[560px] px-5 py-8 lg:max-w-4xl xl:max-w-5xl 2xl:max-w-6xl">
       <h1 className="mb-1 text-2xl font-bold text-slate-900">🛠 관리자 — 뱃지 관리</h1>
       <p className="mb-6 text-sm text-slate-500">
-        조건(키워드 또는 카테고리 × 방문 횟수)을 여러 개 걸면, 손님은 그 조건을 전부 만족해야 뱃지를 얻어요.
+        조건(키워드 × 방문 횟수)을 여러 개 걸면, 손님은 그 조건을 전부 만족해야 뱃지를 얻어요. 카테고리 성취는 여기서 만들지 않아도
+        마이페이지의 티어 뱃지(브론즈~챌린저)로 자동 표시돼요.
       </p>
 
       <div className="lg:max-w-xl">
@@ -212,22 +209,15 @@ export default function AdminBadgeScreen() {
           {conditions.map((c, i) => (
             <div key={i} className="rounded-xl bg-slate-50 p-3">
               <div className="flex items-center gap-2">
-                <select
-                  value={c.type}
-                  onChange={(e) => updateCondition(i, { type: e.target.value, value: "" })}
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm"
-                >
-                  <option value="keyword">키워드</option>
-                  <option value="category">카테고리</option>
-                </select>
+                <span className="rounded-lg bg-slate-100 px-2 py-2 text-sm text-slate-500">키워드</span>
 
                 <select
                   value={c.value}
                   onChange={(e) => updateCondition(i, { value: e.target.value })}
                   className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                 >
-                  <option value="">{c.type === "keyword" ? "키워드 선택" : "카테고리 선택"}</option>
-                  {(c.type === "keyword" ? keywordOptions : categoryOptions).map((opt) => (
+                  <option value="">키워드 선택</option>
+                  {keywordOptions.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}
                     </option>

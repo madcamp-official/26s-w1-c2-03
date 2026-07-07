@@ -63,18 +63,20 @@ async def create_badge(
     )
     badge = badge_result.data[0]
 
+    # 카테고리 성취는 /users/{user_id}/category-tiers의 자동 티어 뱃지로만 나타냄 —
+    # 관리자가 만드는 일회성 뱃지는 키워드 조건만 허용해 두 체계가 섞이지 않게 한다.
     condition_rows = []
     for c in condition_list:
         c_type = c.get("type")
         c_value = c.get("value")
         c_min = c.get("min_count")
-        if c_type not in ("keyword", "category") or not c_value or not c_min:
+        if c_type != "keyword" or not c_value or not c_min:
             raise HTTPException(
-                status_code=422, detail="조건은 type(keyword|category), value, min_count가 모두 필요해요."
+                status_code=422,
+                detail="조건은 type(keyword), value, min_count가 모두 필요해요. 카테고리 성취는 티어 뱃지로 자동 표시돼요.",
             )
-        option_table = "keyword_options" if c_type == "keyword" else "category_options"
         existing_option = safe_execute(
-            db.table(option_table).select("id").eq("name", c_value), "선택지 확인 실패"
+            db.table("keyword_options").select("id").eq("name", c_value), "선택지 확인 실패"
         )
         if not existing_option.data:
             raise HTTPException(status_code=422, detail=f"등록되지 않은 선택지예요: {c_value}")
@@ -216,17 +218,24 @@ def get_stamp_leaderboard(category: str, limit: int = 10):
 
 @router.get("/users/{user_id}/category-tiers")
 def get_user_category_tiers(user_id: str):
-    """유저가 스탬프를 하나라도 모은 카테고리별 티어 목록 (예: 한식 브론즈, 일식 실버)."""
+    """
+    전체 카테고리 목록 기준 티어 (예: 한식 브론즈, 일식 실버).
+    아직 브론즈(1개)도 못 채운 카테고리는 tier: null로 내려가고, 프론트는 이를 잠긴 브론즈 뱃지로 흐리게 표시한다.
+    """
     db = require_supabase()
+    all_categories = safe_execute(db.table("category_options").select("name"), "카테고리 목록 조회 실패")
     totals_by_category = _category_totals(_fetch_approved_checkins_with_categories(db))
 
     tiers = []
-    for category, totals in totals_by_category.items():
+    for row in all_categories.data:
+        category = row["name"]
+        totals = totals_by_category.get(category, {})
         total = totals.get(user_id, 0)
-        if total <= 0:
-            continue
-        top10_ids = {uid for uid, _ in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:10]}
-        tiers.append({"category": category, "total_stamps": total, "tier": _tier_for(total, user_id in top10_ids)})
+        tier = None
+        if total > 0:
+            top10_ids = {uid for uid, _ in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:10]}
+            tier = _tier_for(total, user_id in top10_ids)
+        tiers.append({"category": category, "total_stamps": total, "tier": tier})
 
     tiers.sort(key=lambda t: t["total_stamps"], reverse=True)
     return tiers
