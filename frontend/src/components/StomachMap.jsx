@@ -245,18 +245,32 @@ export default function StomachMap({ stores, onSelectStore, nickname }) {
       const blob = await new Promise((res) => canvas.toBlob(res, "image/png", 0.95))
       const file = new File([blob], "matzzang-stomach.png", { type: "image/png" })
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "내 위장 지도", text: "내가 자주 간 맛집들 🫃 #맛짱" })
-      } else {
-        const a = document.createElement("a")
-        a.href = URL.createObjectURL(blob)
-        a.download = "matzzang-stomach.png"
-        a.click()
-        URL.revokeObjectURL(a.href)
-        setShareMsg("이미지를 저장했어요! 인스타그램에 올려보세요 📷")
+      // 파일 공유가 가능한 환경(대부분의 모바일 브라우저 — 인스타그램/카카오톡 등 공유 시트가 뜸)이면 그걸 우선 시도.
+      // 시트에서 사용자가 취소한 것(AbortError)만 조용히 넘어가고, 그 외 실패(iOS Safari가 비동기 작업 후
+      // 사용자 제스처를 만료시켜 던지는 NotAllowedError 등)는 파일 다운로드로 자동 폴백해서 빈손으로 끝나지 않게 함.
+      const canShareFile = navigator.canShare && navigator.canShare({ files: [file] })
+      if (canShareFile) {
+        try {
+          await navigator.share({ files: [file], title: "내 위장 지도", text: "내가 자주 간 맛집들 🫃 #맛짱" })
+          return
+        } catch (e) {
+          if (e?.name === "AbortError") return // 사용자가 공유 시트를 취소함 — 에러 아님
+          // 그 외 실패는 아래 다운로드 폴백으로 이어짐
+        }
       }
-    } catch (e) {
-      if (e?.name !== "AbortError") setShareMsg("공유 이미지를 만들지 못했어요 😢 다시 시도해주세요.")
+
+      const a = document.createElement("a")
+      a.href = URL.createObjectURL(blob)
+      a.download = "matzzang-stomach.png"
+      a.click()
+      URL.revokeObjectURL(a.href)
+      setShareMsg(
+        canShareFile
+          ? "공유 시트를 열지 못해 이미지를 저장했어요! 인스타그램 앱에서 직접 올려보세요 📷"
+          : "이 브라우저는 공유 시트를 지원하지 않아 이미지를 저장했어요! 인스타그램에 올려보세요 📷"
+      )
+    } catch {
+      setShareMsg("공유 이미지를 만들지 못했어요 😢 다시 시도해주세요.")
     } finally {
       setSharing(false)
     }
