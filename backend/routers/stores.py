@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import re
 import uuid
 from typing import Optional
@@ -570,6 +571,29 @@ async def _scrape_og_image(place_url: str) -> Optional[str]:
 
     _place_image_cache[place_url] = image_url
     return image_url
+
+
+# 위장 지도 캡처/공유 시, 카카오 썸네일을 canvas로 그리면 CORS 때문에 canvas가 오염되어 PNG 추출이 막힘.
+# 그래서 서버가 이미지를 대신 받아 base64 data URL로 돌려주고, 프론트가 그걸 SVG에 인라인해서 캡처함.
+_image_data_cache: dict[str, str] = {}
+
+
+@router.get("/kakao/image-data")
+async def get_image_data(url: str):
+    if url in _image_data_cache:
+        return {"data_url": _image_data_cache[url]}
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=8) as client:
+            res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="이미지를 불러오지 못했습니다.")
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail="이미지를 불러오지 못했습니다.")
+    ctype = res.headers.get("content-type", "image/jpeg").split(";")[0]
+    data_url = f"data:{ctype};base64,{base64.b64encode(res.content).decode()}"
+    if len(_image_data_cache) < 500:  # 메모리 보호용 상한
+        _image_data_cache[url] = data_url
+    return {"data_url": data_url}
 
 
 @router.get("/kakao/place-image")

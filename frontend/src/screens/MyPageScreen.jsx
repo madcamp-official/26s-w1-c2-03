@@ -96,7 +96,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
             {visitedStores === null ? (
               <p className="py-10 text-center text-sm text-slate-400">불러오는 중...</p>
             ) : (
-              <StomachMap stores={visitedStores} onSelectStore={onOpenStore} />
+              <StomachMap stores={visitedStores} onSelectStore={onOpenStore} nickname={user.nickname} />
             )}
           </div>
         </section>

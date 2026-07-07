@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { polygonArea, polygonContains, polygonCentroid } from "d3-polygon"
+import { getImageData } from "../lib/api"
 
 // "내 위장 지도" — 가장 많이 간 Top 5 매장을, 방문 횟수에 비례하는 둥그스름한 블롭으로 위장 실루엣 안에 채운다.
 // (빈 곳은 생겨도 됨 — 직선 경계 대신 원형 테두리로 영역을 구분)
 
-const VIEW_W = 440
-const VIEW_H = 490
+// 콘텐츠(식도~십이지장)에 딱 맞춰 크롭한 viewBox — 위장이 카드를 큼지막하게 채우도록
+const VIEWBOX = "48 14 348 388"
 const TOP_N = 5
 
 // 위장(stomach) 실루엣 — 위저부(좌상단 돔) → 몸통 → 유문(우하단)으로 좁아지는 해부학적 J자 모양
@@ -70,6 +71,15 @@ function mulberry32(a) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
 }
 
 // 점 p에서 선분 AB까지의 거리와 그 위의 최근접점
@@ -150,8 +160,11 @@ function packCircles(items, polygon) {
   return result
 }
 
-export default function StomachMap({ stores, onSelectStore }) {
+export default function StomachMap({ stores, onSelectStore, nickname }) {
   const [active, setActive] = useState(null)
+  const [sharing, setSharing] = useState(false)
+  const [shareMsg, setShareMsg] = useState(null)
+  const svgRef = useRef(null)
 
   // 방문 많은 Top 5
   const items = useMemo(() => {
@@ -179,6 +192,76 @@ export default function StomachMap({ stores, onSelectStore }) {
     }
   }, [items])
 
+  // 위장 지도만 그대로 PNG로 캡처해서 공유(모바일은 인스타 등 공유 시트, 안 되면 이미지 저장)
+  const handleShare = async () => {
+    if (sharing || !svgRef.current) return
+    setSharing(true)
+    setShareMsg(null)
+    try {
+      const clone = svgRef.current.cloneNode(true)
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")
+      // 카카오 썸네일을 base64로 인라인 (CORS로 canvas가 오염되는 것 방지)
+      await Promise.all(
+        [...clone.querySelectorAll("image")].map(async (im) => {
+          const href = im.getAttribute("href") || im.getAttribute("xlink:href")
+          if (href && href.startsWith("http")) {
+            try {
+              const { data_url } = await getImageData(href)
+              im.setAttribute("href", data_url)
+              im.removeAttribute("xlink:href")
+            } catch {
+              im.remove()
+            }
+          }
+        })
+      )
+      const svgStr = new XMLSerializer().serializeToString(clone)
+      const mapImg = await loadImage("data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgStr))
+
+      const scale = 2
+      const CW = 800, mapW = 740, mapX = 30
+      const mapH = Math.round(mapW * (mapImg.height / mapImg.width || 1))
+      const titleH = 96, footH = 64
+      const CH = titleH + mapH + footH
+      const canvas = document.createElement("canvas")
+      canvas.width = CW * scale
+      canvas.height = CH * scale
+      const ctx = canvas.getContext("2d")
+      ctx.scale(scale, scale)
+      ctx.fillStyle = "#fff8f2"
+      ctx.fillRect(0, 0, CW, CH)
+      ctx.textAlign = "center"
+      ctx.fillStyle = "#0f172a"
+      ctx.font = "800 32px system-ui, -apple-system, sans-serif"
+      ctx.fillText(`${nickname ? nickname + "의 " : "내 "}위장 지도 🫃`, CW / 2, 54)
+      ctx.fillStyle = "#f59e0b"
+      ctx.font = "600 17px system-ui, -apple-system, sans-serif"
+      ctx.fillText("자주 간 맛집일수록 크게!", CW / 2, 80)
+      ctx.drawImage(mapImg, mapX, titleH, mapW, mapH)
+      ctx.fillStyle = "#94a3b8"
+      ctx.font = "700 19px system-ui, -apple-system, sans-serif"
+      ctx.fillText("맛집 정복 게임 · 맛짱", CW / 2, titleH + mapH + 40)
+
+      const blob = await new Promise((res) => canvas.toBlob(res, "image/png", 0.95))
+      const file = new File([blob], "matzzang-stomach.png", { type: "image/png" })
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "내 위장 지도", text: "내가 자주 간 맛집들 🫃 #맛짱" })
+      } else {
+        const a = document.createElement("a")
+        a.href = URL.createObjectURL(blob)
+        a.download = "matzzang-stomach.png"
+        a.click()
+        URL.revokeObjectURL(a.href)
+        setShareMsg("이미지를 저장했어요! 인스타그램에 올려보세요 📷")
+      }
+    } catch (e) {
+      if (e?.name !== "AbortError") setShareMsg("공유 이미지를 만들지 못했어요 😢 다시 시도해주세요.")
+    } finally {
+      setSharing(false)
+    }
+  }
+
   if (!stores || stores.length === 0 || nodes.length === 0) {
     return (
       <div className="flex flex-col items-center rounded-2xl bg-slate-50 px-4 py-10 text-center">
@@ -195,9 +278,11 @@ export default function StomachMap({ stores, onSelectStore }) {
   const activeNode = nodes.find((n) => n.key === active)
 
   return (
+    <div>
     <svg
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      className="mx-auto block w-full max-w-[380px] select-none"
+      ref={svgRef}
+      viewBox={VIEWBOX}
+      className="mx-auto block w-full max-w-[440px] select-none"
       onMouseLeave={() => setActive(null)}
     >
       <defs>
@@ -322,5 +407,17 @@ export default function StomachMap({ stores, onSelectStore }) {
         </g>
       )}
     </svg>
+
+      <div className="mt-1 flex flex-col items-center gap-1">
+        <button
+          onClick={handleShare}
+          disabled={sharing}
+          className="flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white active:scale-95 disabled:opacity-60"
+        >
+          {sharing ? "이미지 만드는 중..." : "📷 이미지로 저장·공유"}
+        </button>
+        {shareMsg && <p className="text-center text-xs text-slate-400">{shareMsg}</p>}
+      </div>
+    </div>
   )
 }

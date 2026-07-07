@@ -219,6 +219,11 @@ export function getPlaceImages(placeUrls) {
   })
 }
 
+// 외부 이미지(카카오 썸네일)를 base64 data URL로 받아옴 — 위장 지도 캡처 시 CORS 오염 없이 canvas에 그리기 위함
+export function getImageData(url) {
+  return requestJSON(`/kakao/image-data?url=${encodeURIComponent(url)}`)
+}
+
 // 매장 상세 화면의 "손님이 보낸 사진" 갤러리 (승인 + 공개 동의된 것만)
 export function getStorePhotos(storeId) {
   return requestJSON(`/stores/${storeId}/photos`)
