@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from deps import require_supabase, safe_execute
+from deps import require_admin, require_supabase, safe_execute
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ def get_categories():
     return result.data
 
 
-@router.post("/admin/categories")
+@router.post("/admin/categories", dependencies=[Depends(require_admin)])
 def create_category(payload: OptionCreate):
     db = require_supabase()
     name = payload.name.strip()
@@ -31,7 +31,7 @@ def create_category(payload: OptionCreate):
     return result.data[0]
 
 
-@router.delete("/admin/categories/{category_id}")
+@router.delete("/admin/categories/{category_id}", dependencies=[Depends(require_admin)])
 def delete_category(category_id: str):
     db = require_supabase()
     result = safe_execute(db.table("category_options").delete().eq("id", category_id), "카테고리 삭제 실패")
@@ -47,7 +47,7 @@ def get_keywords():
     return result.data
 
 
-@router.post("/admin/keywords")
+@router.post("/admin/keywords", dependencies=[Depends(require_admin)])
 def create_keyword(payload: OptionCreate):
     db = require_supabase()
     name = payload.name.strip()
@@ -57,7 +57,7 @@ def create_keyword(payload: OptionCreate):
     return result.data[0]
 
 
-@router.delete("/admin/keywords/{keyword_id}")
+@router.delete("/admin/keywords/{keyword_id}", dependencies=[Depends(require_admin)])
 def delete_keyword(keyword_id: str):
     db = require_supabase()
     result = safe_execute(db.table("keyword_options").delete().eq("id", keyword_id), "키워드 삭제 실패")

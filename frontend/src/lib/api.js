@@ -1,9 +1,25 @@
 const API_BASE_URL = '/api';
 
+// 로그인 응답(user)에 실려온 session_token과, 관리자 화면에서 입력한 admin_key를 모든 요청에 자동으로 실어줌.
+// 백엔드가 이 값으로 "요청자가 실제로 본인/관리자가 맞는지" 검증하므로, 프론트가 보내는 user_id를 그대로 믿지 않음.
+function authHeaders() {
+  const headers = {}
+  try {
+    const stored = localStorage.getItem("user")
+    const token = stored ? JSON.parse(stored).session_token : null
+    if (token) headers["Authorization"] = `Bearer ${token}`
+  } catch {
+    // localStorage의 user가 깨져 있으면 그냥 인증 헤더 없이 보냄 (백엔드가 401로 처리)
+  }
+  const adminKey = localStorage.getItem("admin_key")
+  if (adminKey) headers["X-Admin-Key"] = adminKey
+  return headers
+}
+
 async function requestJSON(path, options = {}) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers: { "Content-Type": "application/json", ...authHeaders(), ...options.headers },
   })
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
@@ -13,7 +29,7 @@ async function requestJSON(path, options = {}) {
 }
 
 async function requestForm(path, formData) {
-  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body: formData })
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", body: formData, headers: authHeaders() })
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
     throw new Error(detail.detail || `요청 실패: ${res.status}`)
@@ -22,7 +38,7 @@ async function requestForm(path, formData) {
 }
 
 async function requestDelete(path) {
-  const res = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE" })
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: "DELETE", headers: authHeaders() })
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
     throw new Error(detail.detail || `요청 실패: ${res.status}`)
@@ -112,9 +128,9 @@ export function deleteUser(userId) {
   return requestDelete(`/users/${userId}`)
 }
 
-export function createCheckin({ userId, storeId, purpose, photoFile, photoConsent }) {
+// 체크인 주체는 세션 토큰(Authorization 헤더)으로 서버가 정하므로 userId를 따로 실어 보내지 않음
+export function createCheckin({ storeId, purpose, photoFile, photoConsent }) {
   const formData = new FormData()
-  formData.append("user_id", userId)
   formData.append("store_id", storeId)
   if (purpose) formData.append("purpose", purpose)
   formData.append("photo_consent", photoConsent ? "true" : "false")

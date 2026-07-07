@@ -4,3 +4,4 @@ python-dotenv
 supabase
 httpx
 python-multipart
+pyjwt

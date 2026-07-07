@@ -1,7 +1,7 @@
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from deps import (
@@ -12,6 +12,8 @@ from deps import (
     NAVER_CLIENT_ID,
     NAVER_CLIENT_SECRET,
     PROFILE_BUCKET,
+    create_session_token,
+    get_current_user_id,
     require_supabase,
     safe_execute,
 )
@@ -41,7 +43,8 @@ def signup(payload: UserSignup):
     result = db.table("users").insert(
         {"login_id": payload.login_id, "nickname": payload.nickname}
     ).execute()
-    return result.data[0]
+    user = result.data[0]
+    return {**user, "session_token": create_session_token(user["id"])}
 
 
 @router.post("/users/login")
@@ -50,7 +53,8 @@ def login(payload: UserLogin):
     result = db.table("users").select("*").eq("login_id", payload.login_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="등록되지 않은 아이디예요. 회원가입을 먼저 해주세요.")
-    return result.data[0]
+    user = result.data[0]
+    return {**user, "session_token": create_session_token(user["id"])}
 
 
 # ---------------------------------------------------------------------
@@ -72,7 +76,11 @@ async def update_profile(
     user_id: str,
     nickname: str = Form(...),
     image: Optional[UploadFile] = File(None),
+    current_user_id: str = Depends(get_current_user_id),
 ):
+    if current_user_id != user_id:
+        raise HTTPException(status_code=403, detail="본인 프로필만 수정할 수 있어요.")
+
     nickname = nickname.strip()
     if not nickname:
         raise HTTPException(status_code=422, detail="닉네임을 입력해주세요.")
@@ -115,7 +123,10 @@ async def update_profile(
 
 
 @router.delete("/users/{user_id}")
-def delete_user(user_id: str):
+def delete_user(user_id: str, current_user_id: str = Depends(get_current_user_id)):
+    if current_user_id != user_id:
+        raise HTTPException(status_code=403, detail="본인 계정만 탈퇴할 수 있어요.")
+
     db = require_supabase()
     # checkins/user_badges/user_rewards/reviews 모두 user_id가 users(id)를 참조하는데 cascade가 없어서,
     # 먼저 지워야 유저 삭제가 FK 위반 없이 됨 (예: 리워드를 받은 적 있으면 user_rewards 때문에 막힘)
@@ -188,10 +199,11 @@ async def kakao_login(payload: KakaoLoginRequest):
     # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
     existing = db.table("users").select("*").eq("kakao_id", kakao_id).execute()
     if existing.data:
-        return {**existing.data[0], "is_new": False}
+        user = existing.data[0]
+        return {**user, "is_new": False, "session_token": create_session_token(user["id"])}
 
-    result = db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}).execute()
-    return {**result.data[0], "is_new": True}
+    user = db.table("users").insert({"kakao_id": kakao_id, "nickname": nickname}).execute().data[0]
+    return {**user, "is_new": True, "session_token": create_session_token(user["id"])}
 
 
 # ---------------------------------------------------------------------
@@ -244,10 +256,11 @@ async def google_login(payload: GoogleLoginRequest):
     # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
     existing = db.table("users").select("*").eq("google_id", google_id).execute()
     if existing.data:
-        return {**existing.data[0], "is_new": False}
+        user = existing.data[0]
+        return {**user, "is_new": False, "session_token": create_session_token(user["id"])}
 
-    result = db.table("users").insert({"google_id": google_id, "nickname": nickname}).execute()
-    return {**result.data[0], "is_new": True}
+    user = db.table("users").insert({"google_id": google_id, "nickname": nickname}).execute().data[0]
+    return {**user, "is_new": True, "session_token": create_session_token(user["id"])}
 
 
 # ---------------------------------------------------------------------
@@ -307,7 +320,8 @@ async def naver_login(payload: NaverLoginRequest):
     # 3. 기존 회원이면 그대로, 아니면 새로 생성 (upsert)
     existing = db.table("users").select("*").eq("naver_id", naver_id).execute()
     if existing.data:
-        return {**existing.data[0], "is_new": False}
+        user = existing.data[0]
+        return {**user, "is_new": False, "session_token": create_session_token(user["id"])}
 
-    result = db.table("users").insert({"naver_id": naver_id, "nickname": nickname}).execute()
-    return {**result.data[0], "is_new": True}
+    user = db.table("users").insert({"naver_id": naver_id, "nickname": nickname}).execute().data[0]
+    return {**user, "is_new": True, "session_token": create_session_token(user["id"])}

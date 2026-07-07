@@ -3,7 +3,7 @@ import { purposes } from "../data/mockData"
 import { createCheckin } from "../lib/api"
 
 // 방문 인증 — 사진 + 방문목적 선택 → 대기 화면
-export default function CheckinScreen({ store, user, onBack, onDone }) {
+export default function CheckinScreen({ store, onBack, onDone }) {
   const [purpose, setPurpose] = useState(null)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
@@ -36,7 +36,6 @@ export default function CheckinScreen({ store, user, onBack, onDone }) {
     setSubmitting(true)
     try {
       await createCheckin({
-        userId: user.id,
         storeId: store.id,
         purpose,
         photoFile,

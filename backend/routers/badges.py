@@ -2,9 +2,9 @@ import json
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from deps import BADGE_BUCKET, require_supabase, safe_execute
+from deps import BADGE_BUCKET, require_admin, require_supabase, safe_execute
 
 router = APIRouter()
 
@@ -20,7 +20,7 @@ def get_badges():
     return result.data
 
 
-@router.post("/admin/badges")
+@router.post("/admin/badges", dependencies=[Depends(require_admin)])
 async def create_badge(
     name: str = Form(...),
     description: Optional[str] = Form(None),
@@ -134,7 +134,7 @@ def get_user_badges(user_id: str):
     return _compute_earned_badges(db, user_id)
 
 
-@router.delete("/admin/badges/{badge_id}")
+@router.delete("/admin/badges/{badge_id}", dependencies=[Depends(require_admin)])
 def delete_badge(badge_id: str):
     db = require_supabase()
     # badge_conditions는 on delete cascade라 badges만 지우면 조건도 같이 삭제됨

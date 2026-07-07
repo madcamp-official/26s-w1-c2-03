@@ -291,7 +291,6 @@ export default function CustomerApp({ onGoOwner }) {
             {screen === "checkin" && (
               <CheckinScreen
                 store={selectedStore}
-                user={user}
                 onBack={() => setScreen("detail")}
                 onDone={() => setScreen("home")}
               />

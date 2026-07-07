@@ -1,10 +1,10 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from deps import CHECKIN_BUCKET, require_supabase
+from deps import CHECKIN_BUCKET, get_current_user_id, require_supabase, safe_execute
 
 router = APIRouter()
 
@@ -32,17 +32,18 @@ def get_checkins(store_id: Optional[str] = None, user_id: Optional[str] = None, 
 
 @router.post("/checkins")
 async def create_checkin(
-    user_id: str = Form(...),
     store_id: str = Form(...),
     purpose: Optional[str] = Form(None),
     photo_consent: bool = Form(False),
     file: UploadFile = File(...),
+    current_user_id: str = Depends(get_current_user_id),
 ):
+    # 체크인 주체는 폼으로 받는 값이 아니라 세션 토큰의 유저로 고정 — 남의 user_id로 체크인을 남기지 못하게 함
     db = require_supabase()
 
     contents = await file.read()
     extension = (file.filename or "jpg").split(".")[-1]
-    storage_path = f"{user_id}/{uuid.uuid4()}.{extension}"
+    storage_path = f"{current_user_id}/{uuid.uuid4()}.{extension}"
 
     try:
         db.storage.from_(CHECKIN_BUCKET).upload(
@@ -61,7 +62,7 @@ async def create_checkin(
     )
 
     row = {
-        "user_id": user_id,
+        "user_id": current_user_id,
         "store_id": store_id,
         "photo_url": photo_url,
         "purpose": purpose,
@@ -81,17 +82,29 @@ class CheckinReview(BaseModel):
 
 
 @router.patch("/checkins/{checkin_id}")
-def review_checkin(checkin_id: str, payload: CheckinReview):
+def review_checkin(checkin_id: str, payload: CheckinReview, current_user_id: str = Depends(get_current_user_id)):
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(status_code=422, detail="status는 approved 또는 rejected 여야 합니다.")
     if not (1 <= payload.stamp_count <= MAX_STAMP_COUNT):
         raise HTTPException(status_code=422, detail=f"스탬프 개수는 1~{MAX_STAMP_COUNT}개 사이여야 합니다.")
 
+    db = require_supabase()
+
+    # 이 체크인이 걸린 매장의 실제 사장님(owner_id)만 승인/거절할 수 있음 — 아니면 손님이 자기 체크인을
+    # 직접 승인해 스탬프를 무제한으로 채울 수 있었던 구멍이 그대로 남음
+    checkin = safe_execute(
+        db.table("checkins").select("store_id, stores(owner_id)").eq("id", checkin_id), "체크인 조회 실패"
+    )
+    if not checkin.data:
+        raise HTTPException(status_code=404, detail="체크인을 찾을 수 없습니다.")
+    owner_id = (checkin.data[0].get("stores") or {}).get("owner_id")
+    if owner_id != current_user_id:
+        raise HTTPException(status_code=403, detail="이 매장의 사장님만 체크인을 승인/거절할 수 있어요.")
+
     update_row = {"status": payload.status, "reviewed_at": "now()"}
     if payload.status == "approved":
         update_row["stamp_count"] = payload.stamp_count
 
-    db = require_supabase()
     result = (
         db.table("checkins")
         .update(update_row)

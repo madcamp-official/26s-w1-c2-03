@@ -5,10 +5,18 @@ import uuid
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from deps import KAKAO_REST_API_KEY, NTS_API_KEY, STORE_THUMBNAIL_BUCKET, require_supabase, safe_execute
+from deps import (
+    KAKAO_REST_API_KEY,
+    NTS_API_KEY,
+    STORE_THUMBNAIL_BUCKET,
+    get_current_user_id,
+    require_admin,
+    require_supabase,
+    safe_execute,
+)
 
 router = APIRouter()
 
@@ -179,12 +187,14 @@ async def geocode_address(address: str) -> dict:
 
 
 @router.post("/stores")
-async def create_store(payload: StoreCreate):
+async def create_store(payload: StoreCreate, current_user_id: str = Depends(get_current_user_id)):
     """
     매장 "인증" 신청 — 카카오 장소검색으로 고른 실제 매장에 사업자등록정보로 소유권을 주장.
     이제 매장 노출 여부와는 무관함(손님은 /kakao/nearby-places, /kakao/search-place로 이미 다 볼 수 있음).
     이 신청은 오직 "체크인 승인/리워드 설정 같은 운영 권한을 이 사장님에게 줄지"만 결정함.
     """
+    if payload.owner_id != current_user_id:
+        raise HTTPException(status_code=403, detail="본인 계정으로만 매장을 인증 신청할 수 있어요.")
     if payload.keywords and len(payload.keywords) > MAX_STORE_KEYWORDS:
         raise HTTPException(status_code=422, detail=f"키워드는 최대 {MAX_STORE_KEYWORDS}개까지 선택할 수 있어요.")
 
@@ -253,7 +263,7 @@ class StoreReview(BaseModel):
     status: str  # approved | rejected
 
 
-@router.patch("/stores/{store_id}/review")
+@router.patch("/stores/{store_id}/review", dependencies=[Depends(require_admin)])
 def review_store(store_id: str, payload: StoreReview):
     # 관리자 — 사업자 진위확인을 통과한 인증 신청을 최종 승인/반려
     if payload.status not in ("approved", "rejected"):
