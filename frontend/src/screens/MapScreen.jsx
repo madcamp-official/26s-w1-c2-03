@@ -79,6 +79,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   const [sdkError, setSdkError] = useState(null)
 
   const [places, setPlaces] = useState([])
+  const [placesLoading, setPlacesLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [ourStoresByPlaceId, setOurStoresByPlaceId] = useState({})
   const [stampsByStore, setStampsByStore] = useState({}) // storeId -> 내 스탬프 개수
@@ -94,6 +95,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
   // 주변 매장 (검색 중이 아닐 때). 카테고리를 고르면 그 업종만 서버에서 직접 조회(HomeScreen과 동일)
   useEffect(() => {
     if (isSearching) return
+    setPlacesLoading(true)
     getNearbyPlaces({
       lat: center.lat,
       lng: center.lng,
@@ -105,12 +107,14 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
         setLoadError(null)
       })
       .catch((err) => setLoadError(err.message))
+      .finally(() => setPlacesLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myLocation, cat, isSearching])
 
   // 검색어로 카카오 키워드 검색 (위치로 결과를 좁힘)
   useEffect(() => {
     if (!isSearching) return
+    setPlacesLoading(true)
     const timer = setTimeout(() => {
       searchPlace(query.trim(), { lat: center.lat, lng: center.lng, radius: 10000 })
         .then((data) => {
@@ -119,6 +123,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
           didFitBoundsRef.current = false // 검색 결과 범위로 다시 맞추기
         })
         .catch((err) => setLoadError(err.message))
+        .finally(() => setPlacesLoading(false))
     }, 350)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,6 +342,14 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
             </button>
           ))}
         </div>
+
+        {placesLoading && (
+          <div className="mt-2 flex justify-center">
+            <span className="rounded-full bg-white/95 px-3 py-1 text-xs text-slate-500 shadow-sm">
+              매장 불러오는 중...
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="pointer-events-none absolute bottom-8 left-3 z-[1000] rounded-xl bg-white/95 px-3 py-2 shadow-md">

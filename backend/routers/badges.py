@@ -37,6 +37,27 @@ async def create_badge(
     if not condition_list:
         raise HTTPException(status_code=422, detail="조건을 최소 1개 이상 입력해주세요.")
 
+    # 뱃지 행을 만들기 전에 조건을 전부 검증 — supabase 쓰기가 트랜잭션으로 안 묶여 있어서, 뱃지부터
+    # 만들고 조건 검증을 나중에 하면 조건이 잘못됐을 때 조건 없는 고아 뱃지가 그대로 남는 문제가 있었음.
+    # 카테고리 성취는 /users/{user_id}/category-tiers의 자동 티어 뱃지로만 나타냄 —
+    # 관리자가 만드는 일회성 뱃지는 키워드 조건만 허용해 두 체계가 섞이지 않게 한다.
+    validated_conditions = []
+    for c in condition_list:
+        c_type = c.get("type")
+        c_value = c.get("value")
+        c_min = c.get("min_count")
+        if c_type != "keyword" or not c_value or not c_min:
+            raise HTTPException(
+                status_code=422,
+                detail="조건은 type(keyword), value, min_count가 모두 필요해요. 카테고리 성취는 티어 뱃지로 자동 표시돼요.",
+            )
+        existing_option = safe_execute(
+            db.table("keyword_options").select("id").eq("name", c_value), "선택지 확인 실패"
+        )
+        if not existing_option.data:
+            raise HTTPException(status_code=422, detail=f"등록되지 않은 선택지예요: {c_value}")
+        validated_conditions.append({"condition_type": c_type, "condition_value": c_value, "min_count": int(c_min)})
+
     image_url = None
     if image is not None:
         contents = await image.read()
@@ -63,27 +84,7 @@ async def create_badge(
     )
     badge = badge_result.data[0]
 
-    # 카테고리 성취는 /users/{user_id}/category-tiers의 자동 티어 뱃지로만 나타냄 —
-    # 관리자가 만드는 일회성 뱃지는 키워드 조건만 허용해 두 체계가 섞이지 않게 한다.
-    condition_rows = []
-    for c in condition_list:
-        c_type = c.get("type")
-        c_value = c.get("value")
-        c_min = c.get("min_count")
-        if c_type != "keyword" or not c_value or not c_min:
-            raise HTTPException(
-                status_code=422,
-                detail="조건은 type(keyword), value, min_count가 모두 필요해요. 카테고리 성취는 티어 뱃지로 자동 표시돼요.",
-            )
-        existing_option = safe_execute(
-            db.table("keyword_options").select("id").eq("name", c_value), "선택지 확인 실패"
-        )
-        if not existing_option.data:
-            raise HTTPException(status_code=422, detail=f"등록되지 않은 선택지예요: {c_value}")
-        condition_rows.append(
-            {"badge_id": badge["id"], "condition_type": c_type, "condition_value": c_value, "min_count": int(c_min)}
-        )
-
+    condition_rows = [{**c, "badge_id": badge["id"]} for c in validated_conditions]
     cond_result = safe_execute(db.table("badge_conditions").insert(condition_rows), "뱃지 조건 생성 실패")
 
     badge["badge_conditions"] = cond_result.data

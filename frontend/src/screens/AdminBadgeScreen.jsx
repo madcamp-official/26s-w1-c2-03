@@ -269,30 +269,36 @@ export default function AdminBadgeScreen() {
 
       {/* 만들어진 뱃지 목록 */}
       <section className="mt-8">
-        <h2 className="mb-3 font-semibold text-slate-900">등록된 뱃지 ({badgeList?.length ?? 0})</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-          {badgeList?.map((b) => (
-            <div key={b.id} className="rounded-xl border border-slate-100 bg-white p-3 text-center shadow-sm">
-              {b.image_url ? (
-                <img src={b.image_url} alt={b.name} className="mx-auto h-12 w-12 rounded-lg object-cover" />
-              ) : (
-                <span className="text-3xl">{b.emoji}</span>
-              )}
-              <p className="mt-1 text-sm font-medium text-slate-800">{b.name}</p>
-              <p className="mt-1 text-[11px] leading-tight text-slate-400">
-                {b.badge_conditions
-                  ?.map((c) => `${c.condition_value} ${c.min_count}회`)
-                  .join(" + ")}
-              </p>
-              <button
-                onClick={() => handleDelete(b)}
-                className="mt-2 text-[11px] font-medium text-red-400"
-              >
-                삭제
-              </button>
-            </div>
-          ))}
-        </div>
+        <h2 className="mb-3 font-semibold text-slate-900">
+          등록된 뱃지{badgeList !== null && ` (${badgeList.length})`}
+        </h2>
+        {badgeList === null ? (
+          <p className="text-sm text-slate-400">불러오는 중...</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            {badgeList.map((b) => (
+              <div key={b.id} className="rounded-xl border border-slate-100 bg-white p-3 text-center shadow-sm">
+                {b.image_url ? (
+                  <img src={b.image_url} alt={b.name} className="mx-auto h-12 w-12 rounded-lg object-cover" />
+                ) : (
+                  <span className="text-3xl">{b.emoji}</span>
+                )}
+                <p className="mt-1 text-sm font-medium text-slate-800">{b.name}</p>
+                <p className="mt-1 text-[11px] leading-tight text-slate-400">
+                  {b.badge_conditions
+                    ?.map((c) => `${c.condition_value} ${c.min_count}회`)
+                    .join(" + ")}
+                </p>
+                <button
+                  onClick={() => handleDelete(b)}
+                  className="mt-2 text-[11px] font-medium text-red-400"
+                >
+                  삭제
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )

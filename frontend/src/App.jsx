@@ -2,6 +2,7 @@ import { useState } from "react"
 import CustomerApp from "./CustomerApp"
 import OwnerApp from "./OwnerApp"
 import AdminApp from "./AdminApp"
+import ErrorBoundary from "./components/ErrorBoundary"
 
 // 손님 화면(CustomerApp)과 사장님 화면(OwnerApp)을 오가는 최상위 라우터.
 // 사장님 모드는 카카오로 로그인한 계정이면 누구나 들어갈 수 있음 — 매장을 등록해야 "사장님"이 되는 구조.
@@ -12,13 +13,15 @@ import AdminApp from "./AdminApp"
 export default function App() {
   const [ownerUser, setOwnerUser] = useState(null) // 사장님 모드로 넘어온 로그인 유저
 
-  if (window.location.pathname === "/admin") {
-    return <AdminApp />
-  }
-
-  if (ownerUser) {
-    return <OwnerApp user={ownerUser} onExit={() => setOwnerUser(null)} />
-  }
-
-  return <CustomerApp onGoOwner={(user) => setOwnerUser(user)} />
+  return (
+    <ErrorBoundary>
+      {window.location.pathname === "/admin" ? (
+        <AdminApp />
+      ) : ownerUser ? (
+        <OwnerApp user={ownerUser} onExit={() => setOwnerUser(null)} />
+      ) : (
+        <CustomerApp onGoOwner={(user) => setOwnerUser(user)} />
+      )}
+    </ErrorBoundary>
+  )
 }
