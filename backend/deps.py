@@ -80,3 +80,43 @@ def require_admin(x_admin_key: str = Header(None)) -> None:
         raise HTTPException(status_code=500, detail="ADMIN_API_KEY가 설정되지 않았습니다 (.env 확인)")
     if x_admin_key != ADMIN_API_KEY:
         raise HTTPException(status_code=401, detail="관리자 인증이 필요합니다.")
+
+
+# ---------------------------------------------------------------------
+# 이미지 업로드 검증 — 파일 확장자/Content-Type은 클라이언트가 마음대로 적어 보낼 수 있어서 못 믿음.
+# 실제 파일 내용 맨 앞 바이트(매직 넘버)로 진짜 이미지인지 확인하고, 용량도 상한을 둔다.
+# ---------------------------------------------------------------------
+
+MAX_IMAGE_SIZE_BYTES = 8 * 1024 * 1024  # 8MB
+
+
+def validate_image_bytes(contents: bytes, max_size: int = MAX_IMAGE_SIZE_BYTES) -> None:
+    if len(contents) > max_size:
+        raise HTTPException(status_code=413, detail=f"이미지 용량은 {max_size // (1024 * 1024)}MB 이하여야 해요.")
+    header = contents[:12]
+    is_image = (
+        header.startswith(b"\xff\xd8\xff")  # JPEG
+        or header.startswith(b"\x89PNG\r\n\x1a\n")  # PNG
+        or header.startswith((b"GIF87a", b"GIF89a"))  # GIF
+        or (header[:4] == b"RIFF" and header[8:12] == b"WEBP")  # WEBP
+    )
+    if not is_image:
+        raise HTTPException(status_code=422, detail="jpg/png/gif/webp 이미지 파일만 올릴 수 있어요.")
+
+
+# ---------------------------------------------------------------------
+# 요청 빈도 제한 — 비밀번호 없는 레거시 로그인처럼, 계정 하나당 시도 실패 개념이 없는 엔드포인트를
+# IP당 짧은 시간에 너무 많이 두드리지 못하게 막는 아주 단순한 in-memory 제한.
+# ---------------------------------------------------------------------
+
+_rate_limit_hits: dict[str, list[float]] = {}
+
+
+def rate_limit(key: str, max_requests: int, window_seconds: int) -> None:
+    now = time.time()
+    hits = _rate_limit_hits.setdefault(key, [])
+    while hits and now - hits[0] > window_seconds:
+        hits.pop(0)
+    if len(hits) >= max_requests:
+        raise HTTPException(status_code=429, detail="요청이 너무 잦아요. 잠시 후 다시 시도해주세요.")
+    hits.append(now)

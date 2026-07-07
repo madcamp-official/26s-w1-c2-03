@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from deps import CHECKIN_BUCKET, get_current_user_id, require_supabase, safe_execute
+from deps import CHECKIN_BUCKET, get_current_user_id, require_supabase, safe_execute, validate_image_bytes
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------
 
 
-@router.get("/checkins")
+@router.get("/checkins", dependencies=[Depends(get_current_user_id)])
 def get_checkins(store_id: Optional[str] = None, user_id: Optional[str] = None, status: Optional[str] = None):
     db = require_supabase()
     # users(nickname): 사장님 화면에서 "누가 보냈는지" / stores(...): 마이페이지 방문 기록에 매장 정보 같이 보여줄 때 사용
@@ -66,6 +66,7 @@ async def create_checkin(
             raise HTTPException(status_code=409, detail="이 매장은 하루에 한 번만 체크인할 수 있어요.")
 
     contents = await file.read()
+    validate_image_bytes(contents)
     extension = (file.filename or "jpg").split(".")[-1]
     storage_path = f"{current_user_id}/{uuid.uuid4()}.{extension}"
 

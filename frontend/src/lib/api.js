@@ -320,12 +320,10 @@ export function getUserRewardClaims(userId) {
   return requestJSON(`/users/${userId}/reward-claims`)
 }
 
-// 리워드 수령 요청 (매장 상세의 "수령하기" 버튼) — 사장님 승인 전까지 pending 상태로 대기
-export function claimReward({ rewardId, userId }) {
-  return requestJSON(`/rewards/${rewardId}/claim`, {
-    method: "POST",
-    body: JSON.stringify({ user_id: userId }),
-  })
+// 리워드 수령 요청 (매장 상세의 "수령하기" 버튼) — 사장님 승인 전까지 pending 상태로 대기.
+// 수령 주체는 세션 토큰(Authorization 헤더)으로 서버가 정하므로 userId를 따로 실어 보내지 않음
+export function claimReward(rewardId) {
+  return requestJSON(`/rewards/${rewardId}/claim`, { method: "POST" })
 }
 
 // 매장에 걸린 리워드 수령 요청 목록 (사장님 화면) — status 안 넘기면 전체, "pending" 넘기면 대기 중인 것만

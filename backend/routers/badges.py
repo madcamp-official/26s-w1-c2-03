@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from deps import BADGE_BUCKET, require_admin, require_supabase, safe_execute
+from deps import BADGE_BUCKET, get_current_user_id, require_admin, require_supabase, safe_execute, validate_image_bytes
 
 router = APIRouter()
 
@@ -13,7 +13,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------
 
 
-@router.get("/badges")
+@router.get("/badges", dependencies=[Depends(get_current_user_id)])
 def get_badges():
     db = require_supabase()
     result = safe_execute(db.table("badges").select("*, badge_conditions(*)"), "뱃지 목록 조회 실패")
@@ -61,6 +61,7 @@ async def create_badge(
     image_url = None
     if image is not None:
         contents = await image.read()
+        validate_image_bytes(contents)
         extension = (image.filename or "png").split(".")[-1]
         storage_path = f"{uuid.uuid4()}.{extension}"
         try:
@@ -129,7 +130,7 @@ def _compute_earned_badges(db, user_id: str):
     return earned_badges
 
 
-@router.get("/users/{user_id}/badges")
+@router.get("/users/{user_id}/badges", dependencies=[Depends(get_current_user_id)])
 def get_user_badges(user_id: str):
     db = require_supabase()
     return _compute_earned_badges(db, user_id)
@@ -190,7 +191,7 @@ def _category_totals(checkins):
     return totals
 
 
-@router.get("/leaderboard/stamps")
+@router.get("/leaderboard/stamps", dependencies=[Depends(get_current_user_id)])
 def get_stamp_leaderboard(category: str, limit: int = 10):
     """
     카테고리별 누적 스탬프 순위표.
@@ -217,7 +218,7 @@ def get_stamp_leaderboard(category: str, limit: int = 10):
     ]
 
 
-@router.get("/users/{user_id}/category-tiers")
+@router.get("/users/{user_id}/category-tiers", dependencies=[Depends(get_current_user_id)])
 def get_user_category_tiers(user_id: str):
     """
     전체 카테고리 목록 기준 티어 (예: 한식 브론즈, 일식 실버).

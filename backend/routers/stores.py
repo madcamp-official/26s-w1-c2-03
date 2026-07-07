@@ -17,6 +17,7 @@ from deps import (
     require_admin,
     require_supabase,
     safe_execute,
+    validate_image_bytes,
 )
 
 router = APIRouter()
@@ -26,7 +27,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------
 
 
-@router.get("/stores")
+@router.get("/stores", dependencies=[Depends(get_current_user_id)])
 def get_stores(owner_id: Optional[str] = None, status: Optional[str] = None):
     # 손님 화면은 이제 이 API로 매장을 찾지 않음 — /kakao/nearby-places, /kakao/search-place로 카카오 데이터를
     # 직접 보여주고, 매장을 열 때 /stores/resolve로 우리 DB 행을 만들거나 찾아옴.
@@ -41,7 +42,7 @@ def get_stores(owner_id: Optional[str] = None, status: Optional[str] = None):
     return result.data
 
 
-@router.get("/stores/visit-counts")
+@router.get("/stores/visit-counts", dependencies=[Depends(get_current_user_id)])
 def get_store_visit_counts():
     """모든 매장의 누적 방문자 수(승인된 체크인을 남긴 distinct 유저 수) — 홈 화면 '방문자순' 정렬에 사용."""
     db = require_supabase()
@@ -288,10 +289,20 @@ def review_store(store_id: str, payload: StoreReview):
 
 
 @router.post("/stores/{store_id}/thumbnail")
-async def upload_store_thumbnail(store_id: str, image: UploadFile = File(...)):
+async def upload_store_thumbnail(
+    store_id: str, image: UploadFile = File(...), current_user_id: str = Depends(get_current_user_id)
+):
     # 사장님이 매장 등록 후(또는 나중에) 직접 썸네일을 올릴 때 사용 — 장소검색 자동 이미지를 덮어씀
     db = require_supabase()
+
+    store = safe_execute(db.table("stores").select("owner_id").eq("id", store_id), "매장 조회 실패")
+    if not store.data:
+        raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")
+    if store.data[0]["owner_id"] != current_user_id:
+        raise HTTPException(status_code=403, detail="이 매장의 사장님만 썸네일을 바꿀 수 있어요.")
+
     contents = await image.read()
+    validate_image_bytes(contents)
     extension = (image.filename or "jpg").split(".")[-1]
     storage_path = f"{store_id}/{uuid.uuid4()}.{extension}"
 
@@ -703,7 +714,7 @@ async def get_place_images(payload: PlaceImagesRequest):
     return {url: image for url, image in pairs if image}
 
 
-@router.get("/stores/{store_id}/ranking")
+@router.get("/stores/{store_id}/ranking", dependencies=[Depends(get_current_user_id)])
 def get_store_ranking(store_id: str):
     # 매장 상세 화면의 "방문 랭킹" — 그 매장에서 승인된 체크인을 유저별로 세어 방문 횟수 내림차순으로 반환
     db = require_supabase()
@@ -737,7 +748,7 @@ def get_store_ranking(store_id: str):
     return ranking
 
 
-@router.get("/stores/{store_id}/photos")
+@router.get("/stores/{store_id}/photos", dependencies=[Depends(get_current_user_id)])
 def get_store_photos(store_id: str):
     # 매장 상세 화면의 "손님이 보낸 사진" 갤러리 — 승인됐고, 손님이 공개에 동의한 체크인 사진만 최신순으로
     db = require_supabase()

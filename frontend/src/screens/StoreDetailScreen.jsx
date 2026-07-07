@@ -69,7 +69,7 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
   const handleClaim = async (rewardId) => {
     setClaimingId(rewardId)
     try {
-      await claimReward({ rewardId, userId: user.id })
+      await claimReward(rewardId)
       setClaimsByReward((prev) => ({ ...prev, [rewardId]: "pending" }))
     } catch (err) {
       alert(err.message)

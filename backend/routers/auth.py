@@ -1,7 +1,7 @@
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from deps import (
@@ -14,8 +14,10 @@ from deps import (
     PROFILE_BUCKET,
     create_session_token,
     get_current_user_id,
+    rate_limit,
     require_supabase,
     safe_execute,
+    validate_image_bytes,
 )
 
 router = APIRouter()
@@ -35,7 +37,10 @@ class UserLogin(BaseModel):
 
 
 @router.post("/users/signup")
-def signup(payload: UserSignup):
+def signup(payload: UserSignup, request: Request):
+    # 이 레거시 로그인은 비밀번호가 없어서 login_id만 알면 그 계정이 되는 구조 — 계정 생성/탈취 시도를
+    # 빠르게 반복하지 못하도록 IP당 요청 빈도를 제한한다.
+    rate_limit(f"signup:{request.client.host}", max_requests=10, window_seconds=60)
     db = require_supabase()
     existing = db.table("users").select("id").eq("login_id", payload.login_id).execute()
     if existing.data:
@@ -48,7 +53,8 @@ def signup(payload: UserSignup):
 
 
 @router.post("/users/login")
-def login(payload: UserLogin):
+def login(payload: UserLogin, request: Request):
+    rate_limit(f"login:{request.client.host}", max_requests=10, window_seconds=60)
     db = require_supabase()
     result = db.table("users").select("*").eq("login_id", payload.login_id).execute()
     if not result.data:
@@ -62,7 +68,7 @@ def login(payload: UserLogin):
 # ---------------------------------------------------------------------
 
 
-@router.get("/users/check-nickname")
+@router.get("/users/check-nickname", dependencies=[Depends(get_current_user_id)])
 def check_nickname(nickname: str, exclude_user_id: Optional[str] = None):
     db = require_supabase()
     name = nickname.strip()
@@ -98,6 +104,7 @@ async def update_profile(
 
     if image is not None:
         contents = await image.read()
+        validate_image_bytes(contents)
         extension = (image.filename or "jpg").split(".")[-1]
         storage_path = f"{user_id}.{extension}"
         try:
