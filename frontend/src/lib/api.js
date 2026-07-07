@@ -115,6 +115,7 @@ export async function updateProfile({ userId, nickname, imageFile }) {
   const res = await fetch(`${API_BASE_URL}/users/${userId}/profile`, {
     method: "PATCH",
     body: formData,
+    headers: authHeaders(),
   })
   if (!res.ok) {
     const detail = await res.json().catch(() => ({}))
