@@ -187,21 +187,19 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
             className="w-full text-sm text-slate-700 outline-none"
           />
           {isSearching && (
-            <button onClick={() => setQuery("")} className="text-slate-300">
+            <button onClick={() => setQuery("")} className="shrink-0 text-slate-300">
               ✕
             </button>
           )}
+          <button
+            onClick={onLocate}
+            disabled={locating}
+            title="내 위치 새로고침"
+            className="shrink-0 border-l border-slate-100 pl-2 text-slate-400 disabled:opacity-50"
+          >
+            {locating ? <span className="inline-block animate-spin">⏳</span> : "📍"}
+          </button>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 px-5">
-        <button
-          onClick={onLocate}
-          disabled={locating}
-          className="whitespace-nowrap rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600"
-        >
-          {locating ? "찾는 중..." : "📍 내 위치 새로고침"}
-        </button>
       </div>
 
       {myLocation?.isDemo && (
@@ -255,7 +253,12 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
               >
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-amber-50 text-3xl lg:h-24 lg:w-24">
                   {s.image_url ? (
-                    <img src={s.image_url} alt={s.name} className="h-full w-full object-cover" />
+                    <img
+                      key={s.image_url}
+                      src={s.image_url}
+                      alt={s.name}
+                      className="h-full w-full object-cover [animation:thumb-fade-in_0.4s_ease-in]"
+                    />
                   ) : (
                     emojiFor(s.displayCategory)
                   )}

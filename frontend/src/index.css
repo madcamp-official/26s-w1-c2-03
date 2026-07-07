@@ -1,1 +1,11 @@
 @import "tailwindcss";
+
+/* 카카오맵에서 긁어온 매장 썸네일이 도착했을 때 팝 하고 튀는 대신 부드럽게 페이드인 되도록 */
+@keyframes thumb-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

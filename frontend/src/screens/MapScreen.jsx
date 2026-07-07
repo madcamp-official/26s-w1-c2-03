@@ -2,7 +2,7 @@
 // 우리 DB(getStores)에 이미 있는 매장은 스탬프·카테고리 표시를 덧입힘.
 import { useEffect, useMemo, useRef, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getNearbyPlaces, searchPlace, getStores } from "../lib/api"
+import { getNearbyPlaces, searchPlace, getStores, getPlaceImage } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
 
 const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
@@ -144,6 +144,7 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
         ...p,
         id: ours?.id,
         displayCategory,
+        image_url: ours?.image_url || undefined,
         myStampCount: (ours?.id && stampsByStore[ours.id]) ?? 0,
       }
     })
@@ -181,18 +182,29 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
 
     const el = document.createElement("div")
     el.innerHTML = `
-      <div style="min-width:170px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
-        <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${emojiFor(store.displayCategory)} ${store.name}</p>
-        <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
-          ${store.displayCategory || "음식점"}${(store.myStampCount ?? 0) > 0 ? ` · 스탬프 ${store.myStampCount}개 ✅` : " · 아직 안 감"}
-        </p>
-        ${
-          myLocation
-            ? `<p style="margin:2px 0 0;font-size:13px;font-weight:500;color:#d97706;">📍 여기서 ${formatDistance(
-                haversineKm(myLocation.lat, myLocation.lng, store.lat, store.lng)
-              )}</p>`
-            : ""
-        }
+      <div style="min-width:200px;background:white;border-radius:10px;padding:10px 12px;box-shadow:0 4px 14px rgba(0,0,0,.2);">
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <div id="popup-thumb" style="width:44px;height:44px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:22px;">
+            ${
+              store.image_url
+                ? `<img src="${store.image_url}" alt="" style="width:100%;height:100%;object-fit:cover;" />`
+                : emojiFor(store.displayCategory)
+            }
+          </div>
+          <div style="min-width:0;flex:1;">
+            <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${store.name}</p>
+            <p style="margin:2px 0 0;font-size:13px;color:#64748b;">
+              ${store.displayCategory || "음식점"}${(store.myStampCount ?? 0) > 0 ? ` · 스탬프 ${store.myStampCount}개 ✅` : " · 아직 안 감"}
+            </p>
+            ${
+              myLocation
+                ? `<p style="margin:2px 0 0;font-size:13px;font-weight:500;color:#d97706;">📍 여기서 ${formatDistance(
+                    haversineKm(myLocation.lat, myLocation.lng, store.lat, store.lng)
+                  )}</p>`
+                : ""
+            }
+          </div>
+        </div>
         <button id="open-store-btn" style="margin-top:8px;width:100%;border:none;border-radius:8px;background:#f59e0b;padding:6px 0;font-size:13px;font-weight:500;color:white;cursor:pointer;">
           매장 페이지 열기
         </button>
@@ -208,6 +220,19 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     })
     overlay.setMap(map)
     popupOverlayRef.current = overlay
+
+    // 클릭한 매장 사진 1장만 그때 가져옴(지도 핀 전체를 미리 긁어오지 않음) — 도착하면 이모지 자리에 페이드인으로 교체
+    if (!store.image_url && store.place_url) {
+      getPlaceImage(store.place_url)
+        .then(({ image_url }) => {
+          if (!image_url || popupOverlayRef.current !== overlay) return
+          const thumb = el.querySelector("#popup-thumb")
+          if (thumb) {
+            thumb.innerHTML = `<img src="${image_url}" alt="" style="width:100%;height:100%;object-fit:cover;animation:thumb-fade-in 0.4s ease-in;" />`
+          }
+        })
+        .catch(() => {})
+    }
   }
 
   useEffect(() => {

@@ -99,9 +99,10 @@ export default function StoreDetailScreen({ store, user, onBack, onCheckin, onSe
           <div className="px-5 lg:px-0">
             {store.image_url ? (
               <img
+                key={store.image_url}
                 src={store.image_url}
                 alt={store.name}
-                className="h-48 w-full rounded-3xl object-cover lg:h-64"
+                className="h-48 w-full rounded-3xl object-cover [animation:thumb-fade-in_0.4s_ease-in] lg:h-64"
               />
             ) : (
               <div className="flex items-center justify-center rounded-3xl bg-amber-50 py-10 text-6xl lg:h-64">
