@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -30,6 +31,9 @@ def get_checkins(store_id: Optional[str] = None, user_id: Optional[str] = None, 
     return result.data
 
 
+CHECKIN_COOLDOWN_HOURS = 24  # 같은 매장은 하루에 한 번만 체크인 가능 — 스탬프 어뷰징 방지
+
+
 @router.post("/checkins")
 async def create_checkin(
     store_id: str = Form(...),
@@ -40,6 +44,26 @@ async def create_checkin(
 ):
     # 체크인 주체는 폼으로 받는 값이 아니라 세션 토큰의 유저로 고정 — 남의 user_id로 체크인을 남기지 못하게 함
     db = require_supabase()
+
+    # 같은 매장에 심사 대기 중인 체크인이 있거나, 이미 승인받은 지 얼마 안 됐으면 새로 못 남기게 막음
+    # (사장님 큐에 같은 체크인을 여러 번 올리거나, 하루에 여러 번 승인받아 스탬프를 부풀리는 걸 방지)
+    recent = safe_execute(
+        db.table("checkins")
+        .select("status, created_at")
+        .eq("user_id", current_user_id)
+        .eq("store_id", store_id)
+        .in_("status", ["pending", "approved"])
+        .order("created_at", desc=True)
+        .limit(1),
+        "체크인 중복 확인 실패",
+    )
+    if recent.data:
+        last = recent.data[0]
+        if last["status"] == "pending":
+            raise HTTPException(status_code=409, detail="이미 심사 대기 중인 체크인이 있어요. 사장님 확인을 기다려주세요.")
+        last_at = datetime.fromisoformat(last["created_at"])
+        if datetime.now(timezone.utc) - last_at < timedelta(hours=CHECKIN_COOLDOWN_HOURS):
+            raise HTTPException(status_code=409, detail="이 매장은 하루에 한 번만 체크인할 수 있어요.")
 
     contents = await file.read()
     extension = (file.filename or "jpg").split(".")[-1]

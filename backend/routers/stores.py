@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import re
+import time
 import uuid
 from typing import Optional
 
@@ -444,6 +445,31 @@ def _normalize_kakao_doc(doc: dict) -> dict:
 _FOOD_GROUP_CODES = {"FD6", "CE7"}  # 음식점 / 카페 — 유적지·관광명소·공공기관 등 비매장 결과를 걸러내는 기준
 
 
+# 홈 화면이 검색어 입력·위치 갱신·카테고리 전환마다 카카오 API를 매번 직접 때려서, 사용량이 금방 늘고
+# 짧은 시간에 같은 조건을 반복 요청하는 경우(같은 화면 재방문, 리렌더 등)도 그대로 다시 호출하던 문제가 있었음.
+# 좌표/검색어 조합 단위로 짧게 캐싱해서 카카오 호출 횟수를 줄인다 (결과는 어차피 초 단위로 안 바뀜).
+class _TTLCache:
+    def __init__(self, ttl_seconds: int, max_size: int = 500):
+        self.ttl_seconds = ttl_seconds
+        self.max_size = max_size
+        self._store: dict = {}
+
+    def get(self, key):
+        entry = self._store.get(key)
+        if entry and time.time() - entry[0] < self.ttl_seconds:
+            return entry[1]
+        return None
+
+    def set(self, key, value):
+        if len(self._store) >= self.max_size:
+            self._store.clear()  # 메모리 보호용 상한 — 다 차면 통째로 비우고 다시 채움
+        self._store[key] = (time.time(), value)
+
+
+_search_place_cache = _TTLCache(ttl_seconds=60)
+_nearby_places_cache = _TTLCache(ttl_seconds=120)
+
+
 @router.get("/kakao/search-place")
 async def search_place(query: str, lat: Optional[float] = None, lng: Optional[float] = None, radius: Optional[int] = None):
     """
@@ -454,6 +480,12 @@ async def search_place(query: str, lat: Optional[float] = None, lng: Optional[fl
     """
     if not KAKAO_REST_API_KEY:
         raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
+
+    # 위경도를 대략 100m 격자로 반올림해서, 손 떨림 수준의 좌표 차이로 캐시가 매번 빗나가지 않게 함
+    cache_key = ("search", query, round(lat, 3) if lat is not None else None, round(lng, 3) if lng is not None else None, radius)
+    cached = _search_place_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     url = "https://dapi.kakao.com/v2/local/search/keyword.json"
     headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
@@ -471,11 +503,13 @@ async def search_place(query: str, lat: Optional[float] = None, lng: Optional[fl
         raise HTTPException(status_code=502, detail=f"카카오 장소 검색 실패 (status {res.status_code})")
 
     docs = res.json().get("documents", [])
-    return [
+    results = [
         _normalize_kakao_doc(doc)
         for doc in docs
         if doc.get("category_group_code") in _FOOD_GROUP_CODES
     ]
+    _search_place_cache.set(cache_key, results)
+    return results
 
 
 async def _kakao_category_search(category_group_code: str, lat: float, lng: float, radius: int, pages: int = 1) -> list[dict]:
@@ -547,6 +581,11 @@ async def get_nearby_places(lat: float, lng: float, radius: int = 3000, category
         raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
     radius = max(1, min(radius, 20000))
 
+    cache_key = ("nearby", round(lat, 3), round(lng, 3), radius, category)
+    cached = _nearby_places_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     # 특정 카테고리: 그 업종을 키워드로 넉넉히 모아서 파생 카테고리가 정확히 맞는 것만
     if category and category in _CATEGORY_SEARCH_QUERY:
         docs = await _kakao_keyword_search(_CATEGORY_SEARCH_QUERY[category], lat, lng, radius, pages=3)
@@ -560,6 +599,7 @@ async def get_nearby_places(lat: float, lng: float, radius: int = 3000, category
             norm = _normalize_kakao_doc(doc)
             if norm["category"] == category:  # 키워드 검색 노이즈(예: '치킨호프'는 주점) 제거
                 results.append(norm)
+        _nearby_places_cache.set(cache_key, results)
         return results
 
     # 전체: 음식점 + 카페를 거리순으로 (각 2페이지)
@@ -576,6 +616,7 @@ async def get_nearby_places(lat: float, lng: float, radius: int = 3000, category
             continue
         seen.add(place_id)
         results.append(_normalize_kakao_doc(doc))
+    _nearby_places_cache.set(cache_key, results)
     return results
 
 
