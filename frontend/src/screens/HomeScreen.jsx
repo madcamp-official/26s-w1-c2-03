@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
-import { getNearbyPlaces, searchPlace, getStores, getAvailableRewards, getPlaceImages } from "../lib/api"
+import { getNearbyPlaces, searchPlace, getStores, getAvailableRewards, getPlaceImages, getStoreVisitCounts } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
+
+const SORT_OPTIONS = [
+  { key: "distance", label: "거리순" },
+  { key: "visitors", label: "방문자순" },
+  { key: "frequent", label: "자주 방문한 순" },
+]
 
 const CATEGORY_EMOJI = {
   한식: "🍚",
@@ -46,9 +52,11 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
   const [ourStoresByPlaceId, setOurStoresByPlaceId] = useState({}) // kakao_place_id -> 우리 DB 매장(id/categories/keywords/image_url)
   const [rewardStoreIds, setRewardStoreIds] = useState(new Set()) // 내가 리워드 수령 가능한 매장 id들
   const [stampsByStore, setStampsByStore] = useState({}) // storeId -> 내 스탬프 개수
+  const [visitorCountByStore, setVisitorCountByStore] = useState({}) // storeId -> 전체 유저 누적 방문자 수
   const [thumbsByUrl, setThumbsByUrl] = useState({}) // place_url -> 카카오맵에서 긁어온 대표 이미지 (점진적으로 채워짐)
 
   const [cat, setCat] = useState("전체")
+  const [sortBy, setSortBy] = useState("distance") // distance | visitors | frequent
   const [query, setQuery] = useState("")
   const isSearching = query.trim().length > 0
 
@@ -121,6 +129,12 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       .catch(() => setStampsByStore({}))
   }, [user?.id])
 
+  useEffect(() => {
+    getStoreVisitCounts()
+      .then(setVisitorCountByStore)
+      .catch(() => setVisitorCountByStore({}))
+  }, [])
+
   // 목록에 뜬 매장들의 카카오맵 대표 이미지를 배경에서 한 번에 긁어와 채워줌 (카드는 먼저 이모지로 뜨고, 도착하는 대로 사진으로 교체)
   useEffect(() => {
     const urls = places.map((p) => p.place_url).filter((u) => u && !(u in thumbsByUrl))
@@ -161,8 +175,17 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
       merged = merged.filter((p) => p.matchCategories.has(cat))
     }
 
-    return merged.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-  }, [places, ourStoresByPlaceId, thumbsByUrl, cat, myLocation])
+    // 거리순은 항상 동점자 기준으로도 쓰임 — 방문자순/자주 방문한 순이 0으로 같으면 가까운 순서가 유지되게
+    const byDistance = (a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity)
+    if (sortBy === "visitors") {
+      merged.sort((a, b) => (visitorCountByStore[b.id] ?? 0) - (visitorCountByStore[a.id] ?? 0) || byDistance(a, b))
+    } else if (sortBy === "frequent") {
+      merged.sort((a, b) => (stampsByStore[b.id] ?? 0) - (stampsByStore[a.id] ?? 0) || byDistance(a, b))
+    } else {
+      merged.sort(byDistance)
+    }
+    return merged
+  }, [places, ourStoresByPlaceId, thumbsByUrl, cat, myLocation, sortBy, visitorCountByStore, stampsByStore])
 
   // 세분화한 카테고리 전체를 고정으로 노출 (주변에 없는 카테고리를 눌러도 "결과 없음"으로 안내)
   const catChips = ["전체", ...CATEGORY_ORDER]
@@ -206,7 +229,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         </p>
       )}
 
-      <div className="mt-3 flex gap-2 overflow-x-auto px-5 pb-4">
+      <div className="mt-3 flex gap-2 overflow-x-auto px-5">
         {catChips.map((c) => (
           <button
             key={c}
@@ -216,6 +239,22 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
             {c === "전체" ? c : `${emojiFor(c)} ${c}`}
           </button>
         ))}
+      </div>
+
+      <div className="mt-2.5 flex justify-end px-5 pb-4">
+        <div className="flex gap-1 rounded-full bg-slate-100 p-0.5 text-xs">
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setSortBy(opt.key)}
+              className={`whitespace-nowrap rounded-full px-2.5 py-1 ${
+                sortBy === opt.key ? "bg-white font-medium text-slate-800 shadow-sm" : "text-slate-400"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="px-5">

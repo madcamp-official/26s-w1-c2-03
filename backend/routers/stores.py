@@ -32,6 +32,20 @@ def get_stores(owner_id: Optional[str] = None, status: Optional[str] = None):
     return result.data
 
 
+@router.get("/stores/visit-counts")
+def get_store_visit_counts():
+    """모든 매장의 누적 방문자 수(승인된 체크인을 남긴 distinct 유저 수) — 홈 화면 '방문자순' 정렬에 사용."""
+    db = require_supabase()
+    result = safe_execute(
+        db.table("checkins").select("store_id, user_id").eq("status", "approved"),
+        "매장 방문자 수 조회 실패",
+    )
+    visitors: dict[str, set] = {}
+    for c in result.data:
+        visitors.setdefault(c["store_id"], set()).add(c["user_id"])
+    return {store_id: len(users) for store_id, users in visitors.items()}
+
+
 class StoreResolve(BaseModel):
     kakao_place_id: str
     name: str
@@ -417,11 +431,16 @@ def _normalize_kakao_doc(doc: dict) -> dict:
     }
 
 
+_FOOD_GROUP_CODES = {"FD6", "CE7"}  # 음식점 / 카페 — 유적지·관광명소·공공기관 등 비매장 결과를 걸러내는 기준
+
+
 @router.get("/kakao/search-place")
 async def search_place(query: str, lat: Optional[float] = None, lng: Optional[float] = None, radius: Optional[int] = None):
     """
     상호명으로 카카오 장소를 검색. lat/lng(+radius, 미터)를 같이 넘기면 그 주변으로 결과를 좁힘.
     사장님 대시보드(지역 선택 후 검색)와 손님 화면(위치 기반 검색) 양쪽에서 재사용.
+    카카오 키워드 검색은 지명이 들어가면 유적지·관광명소 같은 음식점 아닌 결과도 섞여 나오므로,
+    category_group_code가 음식점(FD6)/카페(CE7)인 결과만 남긴다.
     """
     if not KAKAO_REST_API_KEY:
         raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
@@ -441,7 +460,12 @@ async def search_place(query: str, lat: Optional[float] = None, lng: Optional[fl
     if res.status_code != 200:
         raise HTTPException(status_code=502, detail=f"카카오 장소 검색 실패 (status {res.status_code})")
 
-    return [_normalize_kakao_doc(doc) for doc in res.json().get("documents", [])]
+    docs = res.json().get("documents", [])
+    return [
+        _normalize_kakao_doc(doc)
+        for doc in docs
+        if doc.get("category_group_code") in _FOOD_GROUP_CODES
+    ]
 
 
 async def _kakao_category_search(category_group_code: str, lat: float, lng: float, radius: int, pages: int = 1) -> list[dict]:

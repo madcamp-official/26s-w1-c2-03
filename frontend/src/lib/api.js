@@ -161,6 +161,11 @@ export function reviewStore({ storeId, status }) {
   })
 }
 
+// 모든 매장의 누적 방문자 수 { storeId: visitorCount } — 홈 화면 '방문자순' 정렬에 사용
+export function getStoreVisitCounts() {
+  return requestJSON("/stores/visit-counts")
+}
+
 // 매장 썸네일 직접 업로드 (등록 직후 호출 — 장소검색으로 자동 채운 이미지가 있어도 이걸로 덮어씀)
 export function uploadStoreThumbnail(storeId, imageBlob) {
   const formData = new FormData()
