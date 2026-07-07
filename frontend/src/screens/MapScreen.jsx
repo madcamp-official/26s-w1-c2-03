@@ -1,6 +1,6 @@
 // 카카오맵 버전 MapScreen — 사장님 등록(인증) 여부와 무관하게 카카오맵 실제 매장을 위치 기반 + 검색으로 보여줌.
 // 우리 DB(getStores)에 이미 있는 매장은 스탬프·카테고리 표시를 덧입힘.
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getNearbyPlaces, searchPlace, getStores, getPlaceImage } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
@@ -150,13 +150,8 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     })
     .filter((p) => cat === "전체" || p.displayCategory === cat)
 
-  // 지금 결과에 실제로 존재하는 카테고리만, 고정 순서대로 칩으로 노출
-  const catChips = useMemo(() => {
-    const present = new Set(
-      places.map((p) => ourStoresByPlaceId[p.kakao_place_id]?.categories?.[0] || p.category)
-    )
-    return ["전체", ...CATEGORY_ORDER.filter((c) => present.has(c))]
-  }, [places, ourStoresByPlaceId])
+  // 세분화한 카테고리 전체를 고정으로 노출 (HomeScreen과 동일)
+  const catChips = ["전체", ...CATEGORY_ORDER]
 
   useEffect(() => {
     let cancelled = false

@@ -223,8 +223,10 @@ create table keyword_options (
   created_at timestamptz default now()
 );
 
+-- 손님 화면의 카카오맵 세분화 카테고리(한식/중식/일식/양식/분식/치킨/주점/카페/디저트)와 맞춰둠 —
+-- 사장님이 매장 등록 시 고르는 카테고리, 뱃지 조건 카테고리가 손님이 보는 필터와 같은 어휘를 쓰게 하기 위함.
 insert into category_options (name) values
-  ('카페'), ('한식'), ('일식'), ('양식'), ('분식'), ('디저트'), ('주점')
+  ('한식'), ('중식'), ('일식'), ('양식'), ('분식'), ('치킨'), ('주점'), ('카페'), ('디저트')
   on conflict (name) do nothing;
 
 insert into keyword_options (name) values

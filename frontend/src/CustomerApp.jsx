@@ -11,7 +11,7 @@ import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
 import SideNav from "./components/SideNav"
 import { getMyLocation } from "./lib/geo"
-import { loginWithKakao, loginWithGoogle, loginWithNaver, getStores, getCheckins, resolveStore } from "./lib/api"
+import { loginWithKakao, loginWithGoogle, loginWithNaver, getStores, getCheckins, resolveStore, getPlaceImage } from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
@@ -160,13 +160,21 @@ export default function CustomerApp({ onGoOwner }) {
   // 체크인·랭킹·뱃지가 사장님 인증 여부와 무관하게 바로 동작하게 함.
   const openStore = async (place) => {
     if (screen === "home" || screen === "map") setPrevScreen(screen)
+    // 홈은 목록 썸네일을 미리 받아와서 place.image_url이 채워져 있지만, 지도 핀에서 온 경우엔 비어 있음.
+    // 그럴 땐 여기서 카카오맵 대표 이미지를 한 장 받아와, 홈/지도 어느 쪽에서 열든 상세가 동일하게 사진을 갖게 함.
+    let imageUrl = place.image_url
+    if (!imageUrl && place.place_url) {
+      imageUrl = await getPlaceImage(place.place_url)
+        .then((r) => r.image_url)
+        .catch(() => null)
+    }
     const store = await resolveStore({
       kakaoPlaceId: place.kakao_place_id,
       name: place.name,
       address: place.address,
       lat: place.lat,
       lng: place.lng,
-      imageUrl: place.image_url,
+      imageUrl,
     })
     // resolve된 DB 행엔 카테고리가 없을 수 있어서, 카카오에서 뽑은 대분류를 상세 표시용으로 실어줌
     setSelectedStore({ ...store, category: store.categories?.length ? undefined : place.category })

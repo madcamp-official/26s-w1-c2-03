@@ -161,13 +161,8 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     return merged.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
   }, [places, ourStoresByPlaceId, thumbsByUrl, cat, myLocation])
 
-  // 지금 결과에 실제로 존재하는 카테고리만, 고정 순서대로 칩으로 노출
-  const catChips = useMemo(() => {
-    const present = new Set(
-      places.map((p) => ourStoresByPlaceId[p.kakao_place_id]?.categories?.[0] || p.category)
-    )
-    return ["전체", ...CATEGORY_ORDER.filter((c) => present.has(c))]
-  }, [places, ourStoresByPlaceId])
+  // 세분화한 카테고리 전체를 고정으로 노출 (주변에 없는 카테고리를 눌러도 "결과 없음"으로 안내)
+  const catChips = ["전체", ...CATEGORY_ORDER]
 
   return (
     <div>
@@ -235,7 +230,11 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
         {!loading && !error && list.length === 0 && (
           <p className="py-10 text-center text-slate-400">
-            {isSearching ? "검색 결과가 없어요 🥲" : "주변에 매장이 없어요 🥲"}
+            {isSearching
+              ? "검색 결과가 없어요 🥲"
+              : cat !== "전체"
+                ? `주변에 '${cat}' 매장이 없어요 🥲`
+                : "주변에 매장이 없어요 🥲"}
           </p>
         )}
 
