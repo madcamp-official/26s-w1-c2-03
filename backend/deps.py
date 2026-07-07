@@ -82,6 +82,16 @@ def require_admin(x_admin_key: str = Header(None)) -> None:
         raise HTTPException(status_code=401, detail="관리자 인증이 필요합니다.")
 
 
+# 관리자 로그인(/auth/admin) 시 발급되는 특수 신원 — users 테이블에 실제 행을 만들지 않고,
+# 테스트 편의를 위해 "이 세션은 어떤 매장이든 사장님 권한으로 취급"하는 용도로만 씀.
+# 실제 유저 id는 Supabase가 생성하는 UUID라 "admin" 문자열과 절대 겹치지 않는다.
+ADMIN_USER_ID = "admin"
+
+
+def is_admin_user(user_id: str) -> bool:
+    return user_id == ADMIN_USER_ID
+
+
 # ---------------------------------------------------------------------
 # 이미지 업로드 검증 — 파일 확장자/Content-Type은 클라이언트가 마음대로 적어 보낼 수 있어서 못 믿음.
 # 실제 파일 내용 맨 앞 바이트(매직 넘버)로 진짜 이미지인지 확인하고, 용량도 상한을 둔다.

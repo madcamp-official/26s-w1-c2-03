@@ -99,6 +99,15 @@ export function loginWithNaver({ code, redirectUri, state }) {
   })
 }
 
+// 관리자 로그인 — 소셜 로그인 없이 관리자 키만으로 로그인. 매장 등록 없이 체크인 승인·리워드
+// 관리 같은 사장님 기능을 테스트할 때 쓰는 용도 (users 테이블에 실제 계정을 만들지 않음)
+export function loginAsAdmin(adminKey) {
+  return requestJSON("/auth/admin", {
+    method: "POST",
+    body: JSON.stringify({ admin_key: adminKey }),
+  })
+}
+
 // 닉네임 중복확인 (excludeUserId를 넘기면 본인 닉네임은 중복으로 안 침)
 export function checkNickname(nickname, excludeUserId) {
   const params = new URLSearchParams({ nickname })

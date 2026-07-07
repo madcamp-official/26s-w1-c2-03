@@ -11,7 +11,7 @@ import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
 import SideNav from "./components/SideNav"
 import { getMyLocation } from "./lib/geo"
-import { loginWithKakao, loginWithGoogle, loginWithNaver, getStores, getCheckins, resolveStore, getPlaceImage } from "./lib/api"
+import { loginWithKakao, loginWithGoogle, loginWithNaver, loginAsAdmin, getStores, getCheckins, resolveStore, getPlaceImage } from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
@@ -25,6 +25,11 @@ export default function CustomerApp({ onGoOwner }) {
   const [authLoading, setAuthLoading] = useState(false) // 카카오/구글/네이버 로그인 공용 로딩 상태
   const handledAuthCode = useRef(false) // StrictMode에서 이펙트가 2번 도는 것 방지
 
+  // 관리자 로그인 — 매장 등록 없이 테스트하기 위한 용도 (소셜 로그인 화면 맨 아래 작은 링크로만 노출)
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
+  const [adminKeyInput, setAdminKeyInput] = useState("")
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false)
+
   const [screen, setScreen] = useState("home")
   const [selectedStore, setSelectedStore] = useState(null)
   const [prevScreen, setPrevScreen] = useState("home") // 매장 상세에서 뒤로가기 시 돌아갈 곳(홈/지도/마이)
@@ -35,9 +40,29 @@ export default function CustomerApp({ onGoOwner }) {
 
   const [pendingRequestCount, setPendingRequestCount] = useState(0) // 내 매장(들)에 온 미확인 인증 요청 개수 — 마이 탭 뱃지용
 
+  // 로그인 응답은 세션 토큰을 포함하지만, 프로필 수정/닉네임 설정 응답(updateProfile)은 유저 행만
+  // 돌려주고 토큰이 없음 — 그대로 덮어쓰면 session_token이 사라져서 다음 요청부터 401 나고
+  // 로그아웃 후 재로그인해야 하는 문제가 있었음. 기존 값과 병합해서 토큰이 유지되게 함.
   const saveUser = (u) => {
-    setUser(u)
-    localStorage.setItem("user", JSON.stringify(u))
+    setUser((prev) => {
+      const merged = { ...prev, ...u }
+      localStorage.setItem("user", JSON.stringify(merged))
+      return merged
+    })
+  }
+
+  const handleAdminLogin = async () => {
+    if (!adminKeyInput.trim()) return
+    setAdminLoginLoading(true)
+    setAuthError(null)
+    try {
+      const u = await loginAsAdmin(adminKeyInput.trim())
+      saveUser(u)
+    } catch (err) {
+      setAuthError(err.message || "관리자 로그인에 실패했어요.")
+    } finally {
+      setAdminLoginLoading(false)
+    }
   }
 
   // 카카오 JS SDK 초기화 (스크립트는 index.html 에서 로드됨)
@@ -246,6 +271,37 @@ export default function CustomerApp({ onGoOwner }) {
           >
             {authLoading ? "로그인 처리 중..." : "N 네이버로 시작하기"}
           </button>
+
+          {/* 관리자 로그인 — 매장 등록 없이 체크인 승인/리워드 관리를 테스트하기 위한 용도 */}
+          {showAdminLogin ? (
+            <div className="mt-4 w-full">
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={adminKeyInput}
+                  onChange={(e) => setAdminKeyInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+                  placeholder="관리자 키"
+                  autoFocus
+                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-400"
+                />
+                <button
+                  onClick={handleAdminLogin}
+                  disabled={adminLoginLoading || !adminKeyInput.trim()}
+                  className="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white disabled:bg-slate-200"
+                >
+                  {adminLoginLoading ? "확인 중..." : "입장"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAdminLogin(true)}
+              className="mt-4 text-xs text-slate-300 underline"
+            >
+              관리자로 로그인
+            </button>
+          )}
         </div>
       </div>
     )

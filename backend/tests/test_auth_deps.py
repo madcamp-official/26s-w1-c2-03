@@ -74,3 +74,9 @@ def test_require_admin_without_configured_key_is_server_error(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         deps.require_admin(x_admin_key="anything")
     assert exc.value.status_code == 500
+
+
+def test_is_admin_user_matches_only_the_sentinel():
+    assert deps.is_admin_user(deps.ADMIN_USER_ID) is True
+    assert deps.is_admin_user("some-real-uuid-1234") is False
+    assert deps.is_admin_user("") is False

@@ -8,6 +8,7 @@ const STATUS_BADGE = {
   pending: { label: "심사중", className: "bg-amber-50 text-amber-600" },
   approved: { label: "승인됨", className: "bg-emerald-50 text-emerald-600" },
   rejected: { label: "반려됨", className: "bg-red-50 text-red-500" },
+  unclaimed: { label: "미인증", className: "bg-slate-100 text-slate-500" },
 }
 
 // 사장님 모드 — 카카오로 로그인한 계정이면 누구나 진입 가능.
@@ -17,19 +18,26 @@ const STATUS_BADGE = {
 //   - 인증한 매장이 하나도 없으면 → 매장 인증하기 버튼만
 //   - 있으면 → 매장 목록(심사 상태 표시) + 맨 아래 매장 인증하기 버튼 (여러 개 가능)
 //   - 매장을 누르면 → 그 매장으로 온 인증 요청 수락/거절 화면
+// 관리자 로그인(user.is_admin)이면 "내 매장" 대신 전체 매장을 보여주고 바로 아무 매장이나 골라
+// 체크인 승인/리워드 관리를 할 수 있음 — 테스트할 때마다 매장 등록·심사를 거칠 필요 없게 하기 위함.
 export default function OwnerApp({ user, onExit }) {
+  const isAdmin = user.is_admin === true
   const [stores, setStores] = useState(null) // null = 로딩 중
+  const [search, setSearch] = useState("") // 관리자 모드에서 전체 매장이 많을 때 이름으로 좁히는 용도
   const [selectedStore, setSelectedStore] = useState(null)
   const [storeTab, setStoreTab] = useState("checkins") // checkins | rewards — 매장 선택했을 때만 씀
   const [showRegisterForm, setShowRegisterForm] = useState(false)
 
   const loadStores = () => {
-    getStores({ ownerId: user.id })
-      .then(setStores)
-      .catch(() => setStores([]))
+    const request = isAdmin ? getStores() : getStores({ ownerId: user.id })
+    request.then(setStores).catch(() => setStores([]))
   }
 
   useEffect(loadStores, [user.id])
+
+  const visibleStores = (stores || []).filter(
+    (s) => !isAdmin || !search.trim() || s.name.toLowerCase().includes(search.trim().toLowerCase())
+  )
 
   const handleRegistered = () => {
     setShowRegisterForm(false)
@@ -95,19 +103,33 @@ export default function OwnerApp({ user, onExit }) {
         ) : stores.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-8 text-center">
             <p className="text-3xl">🏪</p>
-            <p className="mt-3 text-slate-500">아직 인증한 매장이 없어요</p>
-            <button
-              onClick={() => setShowRegisterForm(true)}
-              className="mt-6 w-full rounded-xl bg-amber-500 py-3.5 font-semibold text-white"
-            >
-              매장 인증하기
-            </button>
+            <p className="mt-3 text-slate-500">{isAdmin ? "아직 매장이 하나도 없어요" : "아직 인증한 매장이 없어요"}</p>
+            {!isAdmin && (
+              <button
+                onClick={() => setShowRegisterForm(true)}
+                className="mt-6 w-full rounded-xl bg-amber-500 py-3.5 font-semibold text-white"
+              >
+                매장 인증하기
+              </button>
+            )}
           </div>
         ) : (
           <div className="px-5 py-6">
-            <h2 className="mb-3 text-sm font-semibold text-slate-500">내 매장 ({stores.length})</h2>
+            <h2 className="mb-3 text-sm font-semibold text-slate-500">
+              {isAdmin ? "전체 매장" : "내 매장"} ({visibleStores.length})
+            </h2>
+
+            {isAdmin && (
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="매장 이름으로 찾기"
+                className="mb-3 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-400"
+              />
+            )}
+
             <div className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
-              {stores.map((s) => {
+              {visibleStores.map((s) => {
                 const badge = STATUS_BADGE[s.status] || STATUS_BADGE.approved
                 return (
                   <button
@@ -132,12 +154,14 @@ export default function OwnerApp({ user, onExit }) {
               })}
             </div>
 
-            <button
-              onClick={() => setShowRegisterForm(true)}
-              className="mt-6 w-full rounded-xl border border-dashed border-slate-300 py-3.5 font-medium text-slate-500"
-            >
-              + 매장 인증하기
-            </button>
+            {!isAdmin && (
+              <button
+                onClick={() => setShowRegisterForm(true)}
+                className="mt-6 w-full rounded-xl border border-dashed border-slate-300 py-3.5 font-medium text-slate-500"
+              >
+                + 매장 인증하기
+              </button>
+            )}
           </div>
         )}
       </main>

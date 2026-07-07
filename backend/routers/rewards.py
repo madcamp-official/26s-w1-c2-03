@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from deps import get_current_user_id, require_supabase, safe_execute
+from deps import get_current_user_id, is_admin_user, require_supabase, safe_execute
 
 router = APIRouter()
 
@@ -13,6 +13,9 @@ router = APIRouter()
 
 
 def _require_store_owner(db, store_id: str, current_user_id: str) -> None:
+    # 관리자 로그인은 테스트 편의를 위해 매장 등록 여부와 무관하게 리워드를 관리할 수 있음
+    if is_admin_user(current_user_id):
+        return
     store = safe_execute(db.table("stores").select("owner_id").eq("id", store_id), "매장 조회 실패")
     if not store.data:
         raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")

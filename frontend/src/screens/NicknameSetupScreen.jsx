@@ -1,17 +1,6 @@
 import { useState } from "react"
 import { updateProfile, checkNickname } from "../lib/api"
-
-// 랜덤 닉네임 생성용 단어 목록 — 수식어 + 색깔 + 동물
-const ADJECTIVES = ["용감한", "행복한", "느긋한", "배고픈", "졸린", "신나는", "수줍은", "당당한", "궁금한", "엉뚱한"]
-const COLORS = ["빨간", "파란", "노란", "초록", "보라", "주황", "하얀", "까만", "분홍", "하늘색"]
-const ANIMALS = ["여우", "호랑이", "펭귄", "토끼", "다람쥐", "고양이", "강아지", "곰", "돌고래", "부엉이"]
-
-function randomNickname() {
-  const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]
-  const c = COLORS[Math.floor(Math.random() * COLORS.length)]
-  const n = ANIMALS[Math.floor(Math.random() * ANIMALS.length)]
-  return `${a} ${c} ${n}`
-}
+import { suggestAvailableNickname } from "../lib/randomNickname"
 
 export default function NicknameSetupScreen({ user, onDone }) {
   const [nickname, setNickname] = useState(user.nickname || "")
@@ -29,25 +18,9 @@ export default function NicknameSetupScreen({ user, onDone }) {
     setImagePreview(URL.createObjectURL(file))
   }
 
-  // 닉네임을 후보로 넣고 중복이면 재시도 (최대 5번), 성공하면 입력창에 채워줌
   const handleRandomNickname = async () => {
     setNicknameError(null)
-    for (let i = 0; i < 5; i++) {
-      const candidate = randomNickname()
-      try {
-        const { available } = await checkNickname(candidate, user.id)
-        if (available) {
-          setNickname(candidate)
-          return
-        }
-      } catch {
-        // 확인 실패하면 그냥 후보를 넣어줌 (제출할 때 다시 검증됨)
-        setNickname(candidate)
-        return
-      }
-    }
-    // 5번 다 겹치면 그냥 마지막 후보로
-    setNickname(randomNickname())
+    setNickname(await suggestAvailableNickname(user.id))
   }
 
   const handleBlurCheck = async () => {

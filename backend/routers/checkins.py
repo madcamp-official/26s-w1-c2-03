@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from deps import CHECKIN_BUCKET, get_current_user_id, require_supabase, safe_execute, validate_image_bytes
+from deps import CHECKIN_BUCKET, get_current_user_id, is_admin_user, require_supabase, safe_execute, validate_image_bytes
 
 router = APIRouter()
 
@@ -123,7 +123,8 @@ def review_checkin(checkin_id: str, payload: CheckinReview, current_user_id: str
     if not checkin.data:
         raise HTTPException(status_code=404, detail="체크인을 찾을 수 없습니다.")
     owner_id = (checkin.data[0].get("stores") or {}).get("owner_id")
-    if owner_id != current_user_id:
+    # 관리자 로그인은 테스트 편의를 위해 매장 등록 여부와 무관하게 모든 체크인을 승인/거절할 수 있음
+    if owner_id != current_user_id and not is_admin_user(current_user_id):
         raise HTTPException(status_code=403, detail="이 매장의 사장님만 체크인을 승인/거절할 수 있어요.")
 
     update_row = {"status": payload.status, "reviewed_at": "now()"}

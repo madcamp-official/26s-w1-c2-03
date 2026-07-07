@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from pydantic import BaseModel
 
 from deps import (
+    ADMIN_API_KEY,
+    ADMIN_USER_ID,
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
     KAKAO_CLIENT_SECRET,
@@ -61,6 +63,32 @@ def login(payload: UserLogin, request: Request):
         raise HTTPException(status_code=404, detail="등록되지 않은 아이디예요. 회원가입을 먼저 해주세요.")
     user = result.data[0]
     return {**user, "session_token": create_session_token(user["id"])}
+
+
+# ---------------------------------------------------------------------
+# 관리자 로그인 — 소셜 로그인 없이 관리자 키만으로 들어와서 테스트를 편하게 하기 위한 용도.
+# users 테이블에 행을 만들지 않고(불필요한 테스트 데이터 방지), 어떤 매장이든 체크인 승인·
+# 리워드 관리를 할 수 있는 특수 신원(ADMIN_USER_ID)의 세션 토큰만 발급한다.
+# ---------------------------------------------------------------------
+
+
+class AdminLoginRequest(BaseModel):
+    admin_key: str
+
+
+@router.post("/auth/admin")
+def admin_login(payload: AdminLoginRequest, request: Request):
+    rate_limit(f"admin-login:{request.client.host}", max_requests=10, window_seconds=60)
+    if not ADMIN_API_KEY or payload.admin_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=401, detail="관리자 키가 올바르지 않아요.")
+    return {
+        "id": ADMIN_USER_ID,
+        "nickname": "관리자",
+        "profile_image_url": None,
+        "is_admin": True,
+        "is_new": False,
+        "session_token": create_session_token(ADMIN_USER_ID),
+    }
 
 
 # ---------------------------------------------------------------------

@@ -14,6 +14,7 @@ from deps import (
     NTS_API_KEY,
     STORE_THUMBNAIL_BUCKET,
     get_current_user_id,
+    is_admin_user,
     require_admin,
     require_supabase,
     safe_execute,
@@ -298,7 +299,7 @@ async def upload_store_thumbnail(
     store = safe_execute(db.table("stores").select("owner_id").eq("id", store_id), "매장 조회 실패")
     if not store.data:
         raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")
-    if store.data[0]["owner_id"] != current_user_id:
+    if store.data[0]["owner_id"] != current_user_id and not is_admin_user(current_user_id):
         raise HTTPException(status_code=403, detail="이 매장의 사장님만 썸네일을 바꿀 수 있어요.")
 
     contents = await image.read()

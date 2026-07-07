@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { updateProfile, checkNickname } from "../lib/api"
+import { suggestAvailableNickname } from "../lib/randomNickname"
 
 // 마이페이지 → 프로필 수정 (닉네임 중복 확인 + 사진 변경). 온보딩 화면과 API를 그대로 재사용.
 export default function EditProfileScreen({ user, onBack, onDone }) {
@@ -16,6 +17,11 @@ export default function EditProfileScreen({ user, onBack, onDone }) {
     if (!file) return
     setImageFile(file)
     setImagePreview(URL.createObjectURL(file))
+  }
+
+  const handleRandomNickname = async () => {
+    setNicknameError(null)
+    setNickname(await suggestAvailableNickname(user.id))
   }
 
   const handleBlurCheck = async () => {
@@ -88,6 +94,13 @@ export default function EditProfileScreen({ user, onBack, onDone }) {
         />
         {checking && <p className="mt-1 text-xs text-slate-400">중복 확인 중...</p>}
         {nicknameError && <p className="mt-1 text-xs text-red-500">{nicknameError}</p>}
+
+        <button
+          onClick={handleRandomNickname}
+          className="mt-2 self-start text-sm font-medium text-amber-600"
+        >
+          🎲 랜덤 닉네임 추천
+        </button>
 
         {submitError && <p className="mt-3 text-sm text-red-500">{submitError}</p>}
 
