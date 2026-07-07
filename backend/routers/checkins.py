@@ -18,7 +18,7 @@ def get_checkins(store_id: Optional[str] = None, user_id: Optional[str] = None, 
     db = require_supabase()
     # users(nickname): 사장님 화면에서 "누가 보냈는지" / stores(...): 마이페이지 방문 기록에 매장 정보 같이 보여줄 때 사용
     query = db.table("checkins").select(
-        "*, users(nickname), stores(id, name, categories, keywords, address, lat, lng)"
+        "*, users(nickname), stores(id, name, categories, keywords, address, lat, lng, image_url)"
     )
     if store_id:
         query = query.eq("store_id", store_id)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { getUserBadges, getCheckins } from "../lib/api"
+import StomachMap from "../components/StomachMap"
 
 // 카테고리별 기본 이모지 (HomeScreen과 동일한 매핑)
 const CATEGORY_EMOJI = {
@@ -84,6 +85,21 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
             </button>
           )}
         </div>
+
+        {/* 내 위장 지도 — 자주 간 매장일수록 크게. 여태 방문한 매장 전체를 위장 실루엣에 채움 */}
+        <section className="mt-6">
+          <div className="mb-2 flex items-baseline justify-between">
+            <h3 className="font-semibold text-slate-900">내 위장 지도 🫃</h3>
+            <span className="text-xs text-slate-400">자주 간 곳일수록 크게 나와요</span>
+          </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+            {visitedStores === null ? (
+              <p className="py-10 text-center text-sm text-slate-400">불러오는 중...</p>
+            ) : (
+              <StomachMap stores={visitedStores} onSelectStore={onOpenStore} />
+            )}
+          </div>
+        </section>
 
         {/* 뱃지 (관리자 페이지에서 만든 실제 뱃지 + 실제 획득 여부) */}
         <section className="mt-6">
