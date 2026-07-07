@@ -140,15 +140,18 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     .map((p) => {
       const ours = ourStoresByPlaceId[p.kakao_place_id]
       const displayCategory = ours?.categories?.length ? ours.categories[0] : p.category
+      // 필터 매칭용: 사장님 지정 카테고리 + 카카오 파생 카테고리를 모두 후보로 (HomeScreen과 동일)
+      const matchCategories = new Set([...(ours?.categories || []), p.category].filter(Boolean))
       return {
         ...p,
         id: ours?.id,
         displayCategory,
+        matchCategories,
         image_url: ours?.image_url || undefined,
         myStampCount: (ours?.id && stampsByStore[ours.id]) ?? 0,
       }
     })
-    .filter((p) => cat === "전체" || p.displayCategory === cat)
+    .filter((p) => cat === "전체" || p.matchCategories.has(cat))
 
   // 세분화한 카테고리 전체를 고정으로 노출 (HomeScreen과 동일)
   const catChips = ["전체", ...CATEGORY_ORDER]

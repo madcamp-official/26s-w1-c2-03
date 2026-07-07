@@ -141,12 +141,15 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
   const list = useMemo(() => {
     let merged = places.map((p) => {
       const ours = ourStoresByPlaceId[p.kakao_place_id]
-      // 우리 DB에 사장님이 지정한 카테고리가 있으면 그걸 우선, 없으면 카카오에서 뽑은 대분류(p.category)
+      // 표시는 사장님이 지정한 카테고리 우선, 없으면 카카오에서 뽑은 대분류(p.category)
       const displayCategory = ours?.categories?.length ? ours.categories[0] : p.category
+      // 필터 매칭용: 사장님 지정 카테고리 + 카카오 파생 카테고리를 모두 후보로 (어휘가 어긋나도 안 놓치게)
+      const matchCategories = new Set([...(ours?.categories || []), p.category].filter(Boolean))
       return {
         ...p,
         id: ours?.id,
         displayCategory,
+        matchCategories,
         keywords: ours?.keywords || [],
         // 우리 DB 이미지 > 카카오맵에서 긁어온 썸네일 순으로 사용
         image_url: ours?.image_url || thumbsByUrl[p.place_url] || undefined,
@@ -155,7 +158,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     })
 
     if (cat !== "전체") {
-      merged = merged.filter((p) => p.displayCategory === cat)
+      merged = merged.filter((p) => p.matchCategories.has(cat))
     }
 
     return merged.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
