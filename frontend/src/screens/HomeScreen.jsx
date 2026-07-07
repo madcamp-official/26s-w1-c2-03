@@ -58,19 +58,28 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 검색 중이 아닐 때: 주변 매장 로드.
+  // 카테고리를 고르면(전체 아님) 그 업종만 서버에서 직접 검색해 넉넉히 가져옴 — 반경 안에 매장이 수백 개라
+  // 몇십 개만 로드해두고 프론트에서 거르면 대부분이 필터에 안 걸리는 문제를 해결.
   useEffect(() => {
-    if (!myLocation) return
+    if (isSearching || !myLocation) return
     setLoading(true)
-    getNearbyPlaces({ lat: myLocation.lat, lng: myLocation.lng, radius: 3000 })
+    getNearbyPlaces({
+      lat: myLocation.lat,
+      lng: myLocation.lng,
+      radius: cat === "전체" ? 3000 : 5000,
+      category: cat === "전체" ? undefined : cat,
+    })
       .then((data) => {
         setPlaces(data)
         setError(null)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [myLocation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myLocation, cat, isSearching])
 
-  // 검색어를 타이핑하면 잠깐 기다렸다가 카카오 키워드 검색 (위치로 결과를 좁힘)
+  // 검색어를 타이핑하면 잠깐 기다렸다가 카카오 키워드 검색 (위치로 결과를 좁힘). 카테고리 필터는 결과에 프론트에서 덧적용.
   useEffect(() => {
     if (!isSearching) return
     const timer = setTimeout(() => {
@@ -86,15 +95,6 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
-
-  // 검색어를 지우면 다시 주변 목록으로 복귀
-  useEffect(() => {
-    if (isSearching || !myLocation) return
-    getNearbyPlaces({ lat: myLocation.lat, lng: myLocation.lng, radius: 3000 })
-      .then(setPlaces)
-      .catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSearching])
 
   // 우리 DB에 이미 있는 매장(누군가 방문했거나 사장님이 인증한 매장) — 스탬프·카테고리·키워드 덧입히는 용도
   useEffect(() => {

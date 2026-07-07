@@ -91,17 +91,22 @@ export default function MapScreen({ onSelectStore, myLocation, locating, onLocat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 주변 매장 (검색 중이 아닐 때)
+  // 주변 매장 (검색 중이 아닐 때). 카테고리를 고르면 그 업종만 서버에서 직접 조회(HomeScreen과 동일)
   useEffect(() => {
     if (isSearching) return
-    getNearbyPlaces({ lat: center.lat, lng: center.lng, radius: 3000 })
+    getNearbyPlaces({
+      lat: center.lat,
+      lng: center.lng,
+      radius: cat === "전체" ? 3000 : 5000,
+      category: cat === "전체" ? undefined : cat,
+    })
       .then((data) => {
         setPlaces(data)
         setLoadError(null)
       })
       .catch((err) => setLoadError(err.message))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myLocation, isSearching])
+  }, [myLocation, cat, isSearching])
 
   // 검색어로 카카오 키워드 검색 (위치로 결과를 좁힘)
   useEffect(() => {

@@ -180,10 +180,12 @@ export function searchPlace(query, { lat, lng, radius } = {}) {
   return requestJSON(`/kakao/search-place?${params.toString()}`)
 }
 
-// 현재 위치 반경 내 실제 매장을 카카오맵에서 바로 가져옴 (음식점+카페) — 사장님 등록 여부와 무관하게 노출
-export function getNearbyPlaces({ lat, lng, radius } = {}) {
+// 현재 위치 반경 내 실제 매장을 카카오맵에서 바로 가져옴 (사장님 등록 여부와 무관하게 노출).
+// category를 주면(한식/일식 등) 그 업종만 서버에서 직접 검색해 넉넉히(최대 45개) 돌려줌 — 안 주면 전체(음식점+카페).
+export function getNearbyPlaces({ lat, lng, radius, category } = {}) {
   const params = new URLSearchParams({ lat, lng })
   if (radius) params.set("radius", radius)
+  if (category) params.set("category", category)
   return requestJSON(`/kakao/nearby-places?${params.toString()}`)
 }
 

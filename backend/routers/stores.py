@@ -443,32 +443,94 @@ async def search_place(query: str, lat: Optional[float] = None, lng: Optional[fl
     return [_normalize_kakao_doc(doc) for doc in res.json().get("documents", [])]
 
 
-async def _kakao_category_search(category_group_code: str, lat: float, lng: float, radius: int) -> list[dict]:
+async def _kakao_category_search(category_group_code: str, lat: float, lng: float, radius: int, pages: int = 1) -> list[dict]:
+    # 카카오 카테고리 검색은 한 페이지 15개, 최대 3페이지(45개)까지만 넘겨줌
     url = "https://dapi.kakao.com/v2/local/search/category.json"
     headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
-    params = {"category_group_code": category_group_code, "x": lng, "y": lat, "radius": radius, "sort": "distance"}
-
+    docs: list[dict] = []
     async with httpx.AsyncClient() as client:
-        res = await client.get(url, headers=headers, params=params)
+        for page in range(1, pages + 1):
+            params = {"category_group_code": category_group_code, "x": lng, "y": lat, "radius": radius, "sort": "distance", "size": 15, "page": page}
+            res = await client.get(url, headers=headers, params=params)
+            if res.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"카카오 주변 매장 조회 실패 (status {res.status_code})")
+            data = res.json()
+            docs += data.get("documents", [])
+            if data.get("meta", {}).get("is_end"):
+                break
+    return docs
 
-    if res.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"카카오 주변 매장 조회 실패 (status {res.status_code})")
-    return res.json().get("documents", [])
+
+async def _kakao_keyword_search(query: str, lat: float, lng: float, radius: int, pages: int = 1) -> list[dict]:
+    # 상호·업종 키워드 검색. 카테고리 칩을 눌렀을 때 그 업종 매장을 넉넉히(최대 45개) 모으는 용도로도 사용
+    url = "https://dapi.kakao.com/v2/local/search/keyword.json"
+    headers = {"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"}
+    docs: list[dict] = []
+    async with httpx.AsyncClient() as client:
+        for page in range(1, pages + 1):
+            params = {"query": query, "sort": "distance", "size": 15, "page": page}
+            if lat is not None and lng is not None:
+                params["x"] = lng
+                params["y"] = lat
+                if radius:
+                    params["radius"] = max(1, min(radius, 20000))
+            res = await client.get(url, headers=headers, params=params)
+            if res.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"카카오 장소 검색 실패 (status {res.status_code})")
+            data = res.json()
+            docs += data.get("documents", [])
+            if data.get("meta", {}).get("is_end"):
+                break
+    return docs
+
+
+# 손님 화면 카테고리 칩 -> 카카오 키워드 검색어 (주점은 '주점'보다 '술집'이 결과가 훨씬 많음)
+_CATEGORY_SEARCH_QUERY = {
+    "한식": "한식",
+    "중식": "중식",
+    "일식": "일식",
+    "양식": "양식",
+    "분식": "분식",
+    "치킨": "치킨",
+    "주점": "술집",
+    "카페": "카페",
+    "디저트": "디저트",
+}
 
 
 @router.get("/kakao/nearby-places")
-async def get_nearby_places(lat: float, lng: float, radius: int = 3000):
+async def get_nearby_places(lat: float, lng: float, radius: int = 3000, category: Optional[str] = None):
     """
-    현재 위치 반경 내 실제 매장을 카카오맵에서 바로 가져옴 (음식점 FD6 + 카페 CE7 합쳐서 거리순).
-    사장님이 인증하지 않은 매장도 손님 화면에 그대로 노출하기 위한 용도. radius 단위는 미터, 최대 20km.
+    현재 위치 반경 내 실제 매장을 카카오맵에서 바로 가져옴.
+    - category 없음(전체): 음식점 FD6 + 카페 CE7을 거리순으로(각 2페이지=최대 60개).
+    - category 지정(한식/일식 등): 그 업종을 키워드로 직접 검색(최대 45개)해서, 파생 카테고리가
+      정확히 일치하는 매장만 반환. 반경 내 매장이 수백 개라 카테고리 필터를 프론트에서 하면
+      먼저 로드된 몇십 개 안에서만 걸리는 문제가 있어, 카테고리별 조회는 서버에서 직접 처리함.
+    radius 단위는 미터, 최대 20km.
     """
     if not KAKAO_REST_API_KEY:
         raise HTTPException(status_code=500, detail="KAKAO_REST_API_KEY가 설정되지 않았습니다 (.env 확인)")
     radius = max(1, min(radius, 20000))
 
+    # 특정 카테고리: 그 업종을 키워드로 넉넉히 모아서 파생 카테고리가 정확히 맞는 것만
+    if category and category in _CATEGORY_SEARCH_QUERY:
+        docs = await _kakao_keyword_search(_CATEGORY_SEARCH_QUERY[category], lat, lng, radius, pages=3)
+        seen = set()
+        results = []
+        for doc in docs:
+            place_id = doc.get("id")
+            if place_id in seen:
+                continue
+            seen.add(place_id)
+            norm = _normalize_kakao_doc(doc)
+            if norm["category"] == category:  # 키워드 검색 노이즈(예: '치킨호프'는 주점) 제거
+                results.append(norm)
+        return results
+
+    # 전체: 음식점 + 카페를 거리순으로 (각 2페이지)
     food_docs, cafe_docs = await asyncio.gather(
-        _kakao_category_search("FD6", lat, lng, radius),
-        _kakao_category_search("CE7", lat, lng, radius),
+        _kakao_category_search("FD6", lat, lng, radius, pages=2),
+        _kakao_category_search("CE7", lat, lng, radius, pages=2),
     )
 
     seen = set()
@@ -531,7 +593,7 @@ async def get_place_images(payload: PlaceImagesRequest):
     각 카카오맵 상세 페이지 og:image를 동시성 제한(최대 8개)으로 병렬 스크래핑하고,
     찾은 것만 { place_url: image_url } 형태로 돌려줌 (못 찾은 건 프론트에서 이모지로 대체).
     """
-    urls = list(dict.fromkeys(u for u in payload.place_urls if u))[:45]  # 중복 제거 + 안전 상한
+    urls = list(dict.fromkeys(u for u in payload.place_urls if u))[:60]  # 중복 제거 + 안전 상한
     semaphore = asyncio.Semaphore(8)
 
     async def fetch_one(url: str) -> tuple[str, Optional[str]]:
