@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from deps import (
     ADMIN_API_KEY,
     ADMIN_USER_ID,
+    CHECKIN_BUCKET,
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
     KAKAO_CLIENT_SECRET,
@@ -157,12 +158,31 @@ async def update_profile(
     return result.data[0]
 
 
+def _delete_checkin_photos(db, user_id: str) -> None:
+    # storage.list()는 방금 올라간 파일을 바로 못 잡는 인덱싱 지연이 있어서(직접 확인함),
+    # 대신 DB에 이미 정확히 기록돼 있는 photo_url에서 "{user_id}/{파일명}" 경로를 그대로 뽑아 지운다.
+    # 스토리지 정리는 회원 탈퇴 자체를 막을 이유가 없어서 실패해도 조용히 넘어간다.
+    try:
+        rows = db.table("checkins").select("photo_url").eq("user_id", user_id).execute()
+        marker = f"/{CHECKIN_BUCKET}/"
+        paths = []
+        for row in rows.data or []:
+            url = row.get("photo_url") or ""
+            if marker in url:
+                paths.append(url.split(marker, 1)[1])
+        if paths:
+            db.storage.from_(CHECKIN_BUCKET).remove(paths)
+    except Exception:
+        pass
+
+
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, current_user_id: str = Depends(get_current_user_id)):
     if current_user_id != user_id:
         raise HTTPException(status_code=403, detail="본인 계정만 탈퇴할 수 있어요.")
 
     db = require_supabase()
+    _delete_checkin_photos(db, user_id)
     # checkins/user_badges/user_rewards/reviews 모두 user_id가 users(id)를 참조하는데 cascade가 없어서,
     # 먼저 지워야 유저 삭제가 FK 위반 없이 됨 (예: 리워드를 받은 적 있으면 user_rewards 때문에 막힘)
     safe_execute(db.table("checkins").delete().eq("user_id", user_id), "방문 기록 삭제 실패")
