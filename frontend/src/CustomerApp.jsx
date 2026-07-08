@@ -325,8 +325,8 @@ export default function CustomerApp({ onGoOwner }) {
       <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-white md:h-[92vh] md:max-w-2xl md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:shadow-xl lg:h-[90vh] lg:max-w-6xl lg:flex-row xl:max-w-7xl 2xl:max-w-[1600px]">
         <SideNav screen={screen} setScreen={setScreen} myBadgeCount={pendingRequestCount} />
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {screen === "home" && (
               <HomeScreen onSelectStore={openStore} myLocation={myLocation} locating={locating} onLocate={locateMe} user={user} />
             )}
