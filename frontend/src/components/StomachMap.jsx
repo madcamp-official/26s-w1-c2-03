@@ -233,7 +233,7 @@ export default function StomachMap({ stores, onSelectStore, nickname }) {
       ctx.textAlign = "center"
       ctx.fillStyle = "#0f172a"
       ctx.font = "800 32px system-ui, -apple-system, sans-serif"
-      ctx.fillText(`${nickname ? nickname + "의 " : "내 "}위장 지도 🫃`, CW / 2, 54)
+      ctx.fillText(`${nickname ? nickname + "의 " : "내 "}위장 지도`, CW / 2, 54)
       ctx.fillStyle = "#f59e0b"
       ctx.font = "600 17px system-ui, -apple-system, sans-serif"
       ctx.fillText("자주 간 맛집일수록 크게!", CW / 2, 80)
@@ -251,7 +251,7 @@ export default function StomachMap({ stores, onSelectStore, nickname }) {
       const canShareFile = navigator.canShare && navigator.canShare({ files: [file] })
       if (canShareFile) {
         try {
-          await navigator.share({ files: [file], title: "내 위장 지도", text: "내가 자주 간 맛집들 🫃 #맛짱" })
+          await navigator.share({ files: [file], title: "내 위장 지도", text: "내가 자주 간 맛집들 #맛짱" })
           return
         } catch (e) {
           if (e?.name === "AbortError") return // 사용자가 공유 시트를 취소함 — 에러 아님
@@ -279,7 +279,7 @@ export default function StomachMap({ stores, onSelectStore, nickname }) {
   if (!stores || stores.length === 0 || nodes.length === 0) {
     return (
       <div className="flex flex-col items-center rounded-2xl bg-slate-50 px-4 py-10 text-center">
-        <span className="text-4xl">🫃</span>
+        <span className="text-4xl">🍽️</span>
         <p className="mt-3 text-sm text-slate-400">
           아직 방문 기록이 없어요.
           <br />

@@ -145,7 +145,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
         {/* 내 위장 지도 — 자주 간 매장일수록 크게. 여태 방문한 매장 전체를 위장 실루엣에 채움 */}
         <section className="mt-6">
           <div className="mb-2 flex items-baseline justify-between">
-            <h3 className="font-semibold text-slate-900">내 위장 지도 🫃</h3>
+            <h3 className="font-semibold text-slate-900">내 위장 지도</h3>
             <span className="text-xs text-slate-400">자주 간 곳일수록 크게 나와요</span>
           </div>
           <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
