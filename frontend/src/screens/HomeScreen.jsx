@@ -241,7 +241,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
 
       <div className="px-5">
         {loading && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
             {Array.from({ length: 6 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
@@ -267,7 +267,7 @@ export default function HomeScreen({ onSelectStore, myLocation, locating, onLoca
         )}
 
         {!loading && !error && list.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
             {list.map((s) => (
               <button
                 key={s.kakao_place_id}
