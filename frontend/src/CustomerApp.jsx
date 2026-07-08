@@ -10,8 +10,20 @@ import EditProfileScreen from "./screens/EditProfileScreen"
 import DeleteAccountScreen from "./screens/DeleteAccountScreen"
 import BottomNav from "./components/BottomNav"
 import SideNav from "./components/SideNav"
+import RankUpOverlay from "./components/RankUpOverlay"
 import { getMyLocation } from "./lib/geo"
-import { loginWithKakao, loginWithGoogle, loginWithNaver, loginAsAdmin, getStores, getCheckins, resolveStore, getPlaceImage } from "./lib/api"
+import { detectRankUps } from "./lib/rankUpTracker"
+import {
+  loginWithKakao,
+  loginWithGoogle,
+  loginWithNaver,
+  loginAsAdmin,
+  getStores,
+  getCheckins,
+  resolveStore,
+  getPlaceImage,
+  getUserCategoryTiers,
+} from "./lib/api"
 
 function loadUser() {
   const s = localStorage.getItem("user")
@@ -39,6 +51,28 @@ export default function CustomerApp({ onGoOwner }) {
   const [locating, setLocating] = useState(false)
 
   const [pendingRequestCount, setPendingRequestCount] = useState(0) // 내 매장(들)에 온 미확인 인증 요청 개수 — 마이 탭 뱃지용
+
+  const [rankUpQueue, setRankUpQueue] = useState([]) // 이번에 새로 오른 티어들 — 하나씩 순서대로 연출
+
+  // 티어 승급 감지 — 앱 어디 화면에 있든(로그인 직후 접속 시점 / 접속 중 마이 탭 재진입 시점) 확인.
+  // 접속 안 한 사이에 승급했으면 로그인 직후 바로 뜨고, 접속 중에 승급했으면 마이 탭 들어갈 때 뜬다.
+  const checkRankUps = () => {
+    if (!user) return
+    getUserCategoryTiers(user.id)
+      .then((tiers) => {
+        const promotions = detectRankUps(user.id, tiers)
+        if (promotions.length > 0) setRankUpQueue((q) => [...q, ...promotions])
+      })
+      .catch(() => {})
+  }
+
+  // 로그인 직후(=접속 시점) — 접속 안 하고 있던 사이에 오른 티어를 바로 보여줌
+  useEffect(checkRankUps, [user?.id])
+  // 접속 중에 마이 탭에 재진입할 때 — 접속 중에 오른 티어를 그때 보여줌
+  useEffect(() => {
+    if (screen === "my") checkRankUps()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen])
 
   // 로그인 응답은 세션 토큰을 포함하지만, 프로필 수정/닉네임 설정 응답(updateProfile)은 유저 행만
   // 돌려주고 토큰이 없음 — 그대로 덮어쓰면 session_token이 사라져서 다음 요청부터 401 나고
@@ -322,6 +356,14 @@ export default function CustomerApp({ onGoOwner }) {
   // 폰: 430px 카드 그대로 / 태블릿 세로(md): 하단 탭바 유지하되 카드 폭만 넉넉하게 / lg 이상: 왼쪽 SideNav + 넓은 본문
   return (
     <div className="min-h-[100dvh] bg-white md:flex md:items-center md:justify-center md:bg-slate-100 md:py-8">
+      {rankUpQueue.length > 0 && (
+        <RankUpOverlay
+          key={`${rankUpQueue[0].category}-${rankUpQueue[0].tier}`}
+          category={rankUpQueue[0].category}
+          tier={rankUpQueue[0].tier}
+          onDone={() => setRankUpQueue((q) => q.slice(1))}
+        />
+      )}
       <div className="mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-white md:h-[92vh] md:max-w-2xl md:overflow-hidden md:rounded-3xl md:border md:border-slate-200 md:shadow-xl lg:h-[90vh] lg:max-w-6xl lg:flex-row xl:max-w-7xl 2xl:max-w-[1600px]">
         <SideNav screen={screen} setScreen={setScreen} myBadgeCount={pendingRequestCount} />
 
