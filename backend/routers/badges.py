@@ -2,9 +2,18 @@ import json
 import uuid
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from deps import BADGE_BUCKET, get_current_user_id, require_admin, require_supabase, safe_execute, validate_image_bytes
+from deps import (
+    BADGE_BUCKET,
+    KAKAO_REST_API_KEY,
+    get_current_user_id,
+    require_admin,
+    require_supabase,
+    safe_execute,
+    validate_image_bytes,
+)
 
 router = APIRouter()
 
@@ -241,3 +250,107 @@ def get_user_category_tiers(user_id: str):
 
     tiers.sort(key=lambda t: t["total_stamps"], reverse=True)
     return tiers
+
+
+# ---------------------------------------------------------------------
+# 지역 뱃지 (동+카테고리 "거리 정복", 시 단위 "OO 정복") — 티어 없이 달성 여부만 있는 뱃지.
+# 매장은 위경도만 확실히 있고(미인증 매장은 사장님이 시/구/동을 입력한 적이 없음) 주소 체계가
+# 제각각이라, 카카오 좌표→행정동 변환 API로 직접 동/시를 구해서 쓴다. 매장 위치는 안 바뀌므로
+# 한 번 조회한 결과는 프로세스 메모리에 계속 캐싱해 카카오 API를 반복 호출하지 않는다.
+# ---------------------------------------------------------------------
+
+DONG_CATEGORY_STAMP_THRESHOLD = 30  # 동 + 카테고리 조합 "거리 정복" 뱃지 기준
+CITY_STAMP_THRESHOLD = 50  # 시/도 전체 "정복" 뱃지 기준
+
+_store_region_cache: dict[str, dict] = {}
+
+
+async def _get_store_region(store_id: str, lat: float, lng: float) -> dict:
+    if store_id in _store_region_cache:
+        return _store_region_cache[store_id]
+
+    region = {"sido": None, "dong": None}
+    if KAKAO_REST_API_KEY and lat is not None and lng is not None:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                res = await client.get(
+                    "https://dapi.kakao.com/v2/local/geo/coord2address.json",
+                    headers={"Authorization": f"KakaoAK {KAKAO_REST_API_KEY}"},
+                    params={"x": lng, "y": lat},
+                )
+            if res.status_code == 200:
+                docs = res.json().get("documents", [])
+                if docs:
+                    addr = docs[0].get("address") or docs[0].get("road_address") or {}
+                    region = {
+                        "sido": addr.get("region_1depth_name"),
+                        "dong": addr.get("region_3depth_name"),
+                    }
+        except httpx.HTTPError:
+            pass  # 조회 실패하면 그냥 이 매장은 지역 뱃지 집계에서 빠짐 (실패도 캐싱해 재시도 폭주 방지)
+
+    _store_region_cache[store_id] = region
+    return region
+
+
+def _region_badges_from_totals(
+    dong_category_totals: dict[tuple[str, str], int], city_totals: dict[str, int]
+) -> list[dict]:
+    """순수 함수로 분리 — 카카오 API·DB 없이 임계값/이름 규칙만 테스트할 수 있게."""
+    badges = []
+    for (dong, category), total in dong_category_totals.items():
+        if total >= DONG_CATEGORY_STAMP_THRESHOLD:
+            badges.append(
+                {
+                    "type": "district",
+                    "name": f"{dong} {category} 거리 정복",
+                    "region": dong,
+                    "category": category,
+                    "total_stamps": total,
+                }
+            )
+    for sido, total in city_totals.items():
+        if total >= CITY_STAMP_THRESHOLD:
+            badges.append({"type": "city", "name": f"{sido} 정복", "region": sido, "category": None, "total_stamps": total})
+
+    badges.sort(key=lambda b: b["total_stamps"], reverse=True)
+    return badges
+
+
+@router.get("/users/{user_id}/region-badges", dependencies=[Depends(get_current_user_id)])
+async def get_user_region_badges(user_id: str):
+    """
+    지역 뱃지 — 티어 없이 달성 여부만 있음.
+    - "{동} {카테고리} 거리 정복": 그 동에서 그 카테고리로 누적 스탬프 30개 이상 (예: 전포 카페 거리 정복)
+    - "{시/도} 정복": 그 시/도 전체에서 카테고리 무관 누적 스탬프 50개 이상 (예: 대전 정복)
+    카테고리는 사장님이 매장 등록 시 지정한 값만 쓰므로, 아직 인증 안 된(미인증) 매장 체크인은
+    동+카테고리 뱃지 집계엔 안 잡힘 (카테고리 티어와 동일한 제약) — 시 정복 뱃지는 카테고리와 무관해서 영향 없음.
+    """
+    db = require_supabase()
+    checkins = safe_execute(
+        db.table("checkins")
+        .select("stamp_count, stores(id, lat, lng, categories)")
+        .eq("user_id", user_id)
+        .eq("status", "approved"),
+        "체크인 조회 실패",
+    ).data
+
+    dong_category_totals: dict[tuple[str, str], int] = {}
+    city_totals: dict[str, int] = {}
+
+    for c in checkins:
+        store = c.get("stores") or {}
+        if store.get("lat") is None or store.get("lng") is None:
+            continue
+        region = await _get_store_region(store["id"], store["lat"], store["lng"])
+        stamps = c.get("stamp_count") or 1
+
+        if region["sido"]:
+            city_totals[region["sido"]] = city_totals.get(region["sido"], 0) + stamps
+
+        if region["dong"]:
+            for category in store.get("categories") or []:
+                key = (region["dong"], category)
+                dong_category_totals[key] = dong_category_totals.get(key, 0) + stamps
+
+    return _region_badges_from_totals(dong_category_totals, city_totals)

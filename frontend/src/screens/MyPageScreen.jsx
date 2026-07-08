@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
-import { getUserBadges, getCheckins, getUserCategoryTiers } from "../lib/api"
+import { getUserBadges, getCheckins, getUserCategoryTiers, getUserRegionBadges } from "../lib/api"
 import StomachMap from "../components/StomachMap"
 import TierBadge from "../components/TierBadge"
+import RegionBadge from "../components/RegionBadge"
 
 // 카테고리별 기본 이모지 (HomeScreen과 동일한 매핑)
 const CATEGORY_EMOJI = {
@@ -23,6 +24,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
   const [badges, setBadges] = useState(null)
   const [checkins, setCheckins] = useState(null)
   const [categoryTiers, setCategoryTiers] = useState(null)
+  const [regionBadges, setRegionBadges] = useState(null)
   const [sortBy, setSortBy] = useState("recent") // recent | frequent
 
   useEffect(() => {
@@ -35,6 +37,9 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
     getUserCategoryTiers(user.id)
       .then(setCategoryTiers)
       .catch(() => setCategoryTiers([]))
+    getUserRegionBadges(user.id)
+      .then(setRegionBadges)
+      .catch(() => setRegionBadges([]))
   }, [user.id])
 
   // 승인된 체크인을 매장별로 묶어서 방문 횟수·최근 방문일 계산 (더미 데이터 없이 실제 방문만)
@@ -108,6 +113,29 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
                   emoji={emojiFor(t.category)}
                   label={t.category}
                   totalStamps={t.total_stamps}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 지역 정복 뱃지 — 티어 없이 달성 여부만 있는 뱃지라 무채색으로 통일 */}
+        <section className="mt-6">
+          <h3 className="mb-3 font-semibold text-slate-900">지역 정복 뱃지</h3>
+          {regionBadges === null ? (
+            <p className="text-sm text-slate-400">불러오는 중...</p>
+          ) : regionBadges.length === 0 ? (
+            <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
+              한 동네·도시에서 스탬프를 많이 모으면 정복 뱃지가 생겨요!
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {regionBadges.map((b) => (
+                <RegionBadge
+                  key={`${b.type}-${b.region}-${b.category ?? ""}`}
+                  type={b.type}
+                  name={b.name}
+                  totalStamps={b.total_stamps}
                 />
               ))}
             </div>

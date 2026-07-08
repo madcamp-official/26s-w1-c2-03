@@ -388,6 +388,11 @@ export function getUserCategoryTiers(userId) {
   return requestJSON(`/users/${userId}/category-tiers`)
 }
 
+// 내 지역 정복 뱃지 (티어 없음 — 동+카테고리 "거리 정복", 시/도 전체 "정복")
+export function getUserRegionBadges(userId) {
+  return requestJSON(`/users/${userId}/region-badges`)
+}
+
 // 관리자 — 뱃지 생성 (이모지 또는 이미지 + 조건 여러 개)
 export function createBadge({ name, description, emoji, conditions, imageBlob }) {
   const formData = new FormData()
