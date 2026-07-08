@@ -9,3 +9,30 @@
     opacity: 1;
   }
 }
+
+/* 티어 승급 연출(RankUpOverlay) 전용 — 별로면 이 블록 + RankUpOverlay.jsx + rankUpTracker.js만 지우면 원복됨 */
+@keyframes rankup-pop {
+  0% {
+    transform: scale(0.3) rotate(-15deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15) rotate(5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes rankup-text-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

@@ -3,7 +3,9 @@ import { getUserBadges, getCheckins, getUserCategoryTiers, getUserRegionBadges }
 import StomachMap from "../components/StomachMap"
 import TierBadge from "../components/TierBadge"
 import RegionBadge from "../components/RegionBadge"
+import RankUpOverlay from "../components/RankUpOverlay"
 import { emojiFor } from "../lib/categoryMeta"
+import { detectRankUps } from "../lib/rankUpTracker"
 
 // 마이 — 프로필 + 실제 뱃지 + 실제 방문 기록 (정복 지도)
 export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenStore, onEditProfile, onDeleteAccount }) {
@@ -12,6 +14,7 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
   const [categoryTiers, setCategoryTiers] = useState(null)
   const [regionBadges, setRegionBadges] = useState(null)
   const [sortBy, setSortBy] = useState("recent") // recent | frequent
+  const [rankUpQueue, setRankUpQueue] = useState([]) // 이번에 새로 오른 티어들 — 하나씩 순서대로 연출
 
   useEffect(() => {
     getUserBadges(user.id)
@@ -21,7 +24,11 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
       .then(setCheckins)
       .catch(() => setCheckins([]))
     getUserCategoryTiers(user.id)
-      .then(setCategoryTiers)
+      .then((tiers) => {
+        setCategoryTiers(tiers)
+        const promotions = detectRankUps(user.id, tiers)
+        if (promotions.length > 0) setRankUpQueue(promotions)
+      })
       .catch(() => setCategoryTiers([]))
     getUserRegionBadges(user.id)
       .then(setRegionBadges)
@@ -54,6 +61,14 @@ export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenS
 
   return (
     <div className="pb-4 lg:mx-auto lg:max-w-3xl">
+      {rankUpQueue.length > 0 && (
+        <RankUpOverlay
+          key={`${rankUpQueue[0].category}-${rankUpQueue[0].tier}`}
+          category={rankUpQueue[0].category}
+          tier={rankUpQueue[0].tier}
+          onDone={() => setRankUpQueue((q) => q.slice(1))}
+        />
+      )}
       <header className="px-5 pt-6 pb-4">
         <h1 className="text-2xl font-bold text-slate-900">내 정복 지도 🏆</h1>
       </header>
