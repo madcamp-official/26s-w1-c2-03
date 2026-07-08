@@ -1,7 +1,9 @@
 # 맛짱 (Matzzang) — 26s-w1-c2-03
 
-> 맛집을 방문하고 사진으로 인증해 **뱃지를 모으고 랭킹을 정복**하는 포켓몬고식 오프라인 탐험 게임.
-> 사장님에겐 단골을 게임처럼 만들어주는 B2B 마케팅 도구.
+> 맛집을 방문하고 사진으로 인증해 **스탬프·뱃지·티어를 모으는** 포켓몬고식 오프라인 탐험 게임.
+> 사장님에겐 단골을 게임처럼 관리하게 해주는 저비용 B2B 마케팅 도구.
+
+카카오맵의 실제 매장 데이터를 그대로 손님 화면에 보여주고(사장님이 등록하지 않아도 탐색 가능), 사장님은 사업자등록정보로 매장을 "인증"해서 체크인 승인·리워드 설정 같은 운영 권한을 갖는 구조입니다.
 
 ## 공통과제 I : 웹 기반 프로젝트 (2인 1팀)
 
@@ -13,20 +15,10 @@
 
 ## 팀원
 
-| 이름 | GitHub | 역할 |
-|---|---|---|
-| 김민재 |  | 프론트엔드 (React · Vite · Tailwind) |
-| 원건희 |  | 백엔드 (FastAPI · Supabase) |
-
----
-
-## 기술 스택
-
-| 구분 | 스택 |
+| 이름 | 역할 |
 |---|---|
-| 프론트엔드 | React, Vite, Tailwind CSS, Leaflet(지도, 추후 네이버 지도 교체 예정) |
-| 백엔드 | Python, FastAPI, Supabase(PostgreSQL) |
-| 배포 | Vercel(FE) — 예정 |
+| 김민재 | 프론트엔드 (React · Vite · Tailwind CSS) |
+| 원건희 | 백엔드 (FastAPI · Supabase) |
 
 ---
 
@@ -34,89 +26,135 @@
 
 > 상세 기획: [기획서.md](기획서.md)
 
-- **주제:** 맛집 방문을 사진으로 인증해 뱃지·랭킹을 모으는 게임형 맛집 탐험 서비스
+- **주제:** 맛집 방문을 사진으로 인증해 스탬프·뱃지·티어를 모으는 게임형 맛집 탐험 서비스
 - **목적:** 손님에겐 "방문이 게임이 되는" 재미와 리워드를, 사장님에겐 단골을 게임처럼 관리하는 저비용 마케팅 도구 제공
-- **핵심 작동:** QR/앱에서 음식 사진 촬영 → **사장님이 카운터에서 수락** → 스탬프·뱃지·랭킹 반영 → 월별 랭킹 상위에게 사장님 리워드
-- **차별점:** 사장님이 직접 승인·보상하는 구조(조작 방지 + B2B 훅). 국내엔 "뱃지 수집 게임 + 사장님 랭킹 리워드"를 정면으로 하는 서비스가 없음
+- **핵심 작동:** 손님이 매장에서 음식 사진 촬영 → **사장님이 카운터에서 수락** → 스탬프 적립 → 뱃지·카테고리 티어·리워드 반영
+- **차별점:** 사장님이 직접 승인·보상하는 구조(조작 방지 + B2B 훅), 매장 소유권은 사업자등록정보 진위확인(국세청 API)으로 검증
 - **예상 사용자:**
   - 손님: 맛집 탐방·수집을 즐기는 사용자
   - 사장님: 단골을 늘리고 싶은 카페·음식점 점주
 
 ---
 
-## 기능 명세서
+## 핵심 기능
 
-> 현재 진행 상황: **프론트엔드 화면(뼈대) 구현 완료** (목데이터 기반) · 백엔드 연동 예정
+### 손님
 
-### 필수 기능
+- 카카오/구글/네이버 소셜 로그인 (JWT 세션 토큰 발급)
+- 홈/지도: 현재 위치 기반 + 검색으로 주변 실제 매장 탐색 (카카오맵 데이터 실시간 연동, 사장님 등록 여부와 무관하게 전부 노출)
+- 세분화된 카테고리 필터(한식/중식/일식/양식/분식/치킨/주점/카페/디저트), 거리순·방문자순·자주 방문한 순 정렬
+- 매장 상세: 정보·내 스탬프·방문 랭킹·사장님 리워드·손님이 보낸 사진
+- 방문 인증(체크인): 음식 사진 + 방문 목적 선택 → 사장님 수락 대기 → 스탬프 적립
+- 마이페이지: 프로필, 카테고리별 티어(브론즈~챌린저), 뱃지, **내 위장 지도**(방문 매장을 위장 실루엣에 시각화 + 이미지 저장/공유), 방문 기록
+- 리워드 수령 요청, 회원탈퇴, 프로필 수정
 
-- [x] 회원가입 / 로그인 (아이디·비밀번호·닉네임)
-- [x] 홈: 지역(시/도·구) 선택 또는 내 위치 기준 가까운 순 + 카테고리 필터
-- [x] 지도: 등록 매장 핀 표시, 방문한 곳 강조, 내 위치·거리, 핀 클릭 → 매장 페이지
-- [x] 매장 상세: 정보·내 스탬프·방문 랭킹·사장님 리워드
-- [x] 방문 인증: 음식 사진 + 방문 목적 선택 → 사장님 수락 대기
-- [x] 마이페이지: 프로필·뱃지·방문 기록(정복 지도)
-- [ ] 사장님 대시보드: 매장 등록, 인증 수락/거절, 방문 통계, 리워드 등록
-- [ ] 백엔드 API 연동 (현재는 목데이터)
+### 사장님
 
-### 선택 기능
+- 카카오 장소검색으로 실제 매장을 찾아 **사업자등록정보로 소유권 인증**(국세청 진위확인 API 연동)
+- 방문 인증 요청 수락/거절(스탬프 개수 직접 지정)
+- 리워드(스탬프 N개 달성 시 메뉴/굿즈 무료·증정·할인) 등록 및 수령 요청 승인
 
-- [ ] 월별 랭킹 리워드 자동 지급
-- [ ] 자체 리뷰 및 '리뷰왕' 칭호
-- [ ] 네이버 지도 API 연동 (현재 Leaflet)
-- [ ] 방문 인증 조작 방지 (GPS 반경 체크 등)
+### 관리자 (`/admin`, 키 인증)
 
----
-
-## IA 및 화면 설계서
-
-> Figma 디자인 작업 예정. 현재 구현된 손님 앱 화면 구조:
-
-```
+- 매장 인증 신청 승인/반려
+- 뱃지 생성(이모지/이미지 + 키워드 조건)
+- 카테고리·키워드 선택지 관리
 
 ---
 
-## DB 스키마
+## 기술 스택
 
-> 상세: [DB스키마.md](DB스키마.md)
-
-주요 테이블: `owners`(사장님) · `stores`(매장) · `users`(손님) · `checkins`(방문 인증) ·
-`badges` / `user_badges`(뱃지) · `rewards` / `user_rewards`(리워드) · `reviews`(리뷰)
-
-<!-- ERD 이미지 첨부 예정 -->
-
----
-
-## API 문서
-
-> 상세: [API명세.md](API명세.md)
-
-| Method | Endpoint | 설명 |
-|---|---|---|
-| POST | `/auth/signup` | 회원가입 |
-| POST | `/auth/login` | 로그인 |
-| POST | `/stores` | 매장 등록 (사장님) |
-| GET | `/stores` | 매장 목록 (지역·카테고리 필터) |
-| POST | `/checkins` | 방문 인증 올리기 (사진 + 목적) |
-| GET | `/stores/{store_id}/checkins?status=pending` | 대기 중인 인증 요청 |
-| PATCH | `/checkins/{checkin_id}` | 인증 수락 / 거절 |
-| GET | `/users/{user_id}/badges` | 내 뱃지 |
-| GET | `/stores/{store_id}/ranking` | 매장 방문 랭킹 |
+| 구분 | 스택 |
+|---|---|
+| 프론트엔드 | React 19, Vite, Tailwind CSS, Kakao Maps SDK, d3-polygon |
+| 백엔드 | Python, FastAPI, Supabase (PostgreSQL + Storage), PyJWT |
+| 인증 | 카카오/구글/네이버 OAuth 2.0, 자체 발급 JWT 세션 토큰 |
+| 외부 API | 카카오 로컬(장소검색·좌표변환), 카카오맵, 공공데이터포털 국세청 사업자등록정보 진위확인 |
+| 배포 | VM 서버 (uvicorn + Vite) |
 
 ---
 
-## 배포 결과물
+## 아키텍처 개요
 
-- **서비스 URL:** 배포 예정 (Vercel)
-- **실행 방법:**
+- **매장 데이터는 두 갈래**: 손님 화면은 카카오맵 실시간 API로 매장을 그대로 보여주고, 우리 DB(`stores` 테이블)는 손님이 열람했거나 사장님이 인증한 매장만 담아 스탬프·카테고리·리워드 같은 부가 데이터를 얹습니다. 매장을 처음 열람하는 순간 자동으로 DB에 `unclaimed` 상태로 생성됩니다(`POST /stores/resolve`).
+- **매장 "인증"은 노출과 무관**: 사장님이 사업자등록정보로 인증해도 매장 노출 여부는 바뀌지 않고, 체크인 승인·리워드 설정 같은 **운영 권한**만 얻습니다. 국세청 진위확인 → 관리자 승인의 2단계 검증.
+- **인증/보안**: 로그인 시 발급한 JWT를 모든 요청에 실어 보내고, 서버가 "요청자가 실제 본인/그 매장 사장님이 맞는지"를 검증합니다. 관리자 API는 별도 공유 키로 보호됩니다.
+
+더 자세한 파일별 설명은 [PROJECT_GUIDE.md](PROJECT_GUIDE.md)를 참고하세요.
+
+---
+
+## 실행 방법
+
+### 백엔드
 
 ```bash
-# 프론트엔드
+cd backend
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env       # 아래 "환경변수" 참고해서 값 채우기
+uvicorn main:app --reload
+# → http://localhost:8000  (/health로 상태 확인)
+```
+
+### 프론트엔드
+
+```bash
 cd frontend
 npm install
+cp .env.example .env       # 아래 "환경변수" 참고해서 값 채우기
 npm run dev
 # → http://localhost:5173
 ```
+
+### 환경변수
+
+**`backend/.env`**
+
+| 키 | 용도 |
+|---|---|
+| `SUPABASE_URL`, `SUPABASE_KEY` | Supabase 프로젝트 연결 |
+| `KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET` | 카카오 로그인 + 장소검색/좌표변환 |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 구글 로그인 |
+| `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 네이버 로그인 |
+| `NTS_API_KEY` | 공공데이터포털 "사업자등록정보 진위확인" 서비스키 |
+| `SESSION_SECRET_KEY` | 로그인 세션 JWT 서명용 (운영 배포 시 반드시 변경) |
+| `ADMIN_API_KEY` | 관리자 화면(`/admin`) 보호용 공유 키 |
+
+**`frontend/.env`**
+
+| 키 | 용도 |
+|---|---|
+| `VITE_API_BASE_URL` | 백엔드 주소 |
+| `VITE_KAKAO_JS_KEY` | 카카오 로그인 SDK + 카카오맵 |
+| `VITE_GOOGLE_CLIENT_ID` | 구글 로그인 |
+| `VITE_NAVER_CLIENT_ID` | 네이버 로그인 |
+
+### 테스트
+
+```bash
+cd backend
+pytest
+```
+
+---
+
+## 문서
+
+| 문서 | 내용 |
+|---|---|
+| [PROJECT_GUIDE.md](PROJECT_GUIDE.md) | 파일별 기능·사용 API·설계 이유 상세 설명 |
+| [기획서.md](기획서.md) | 서비스 기획 |
+| [DB스키마.md](DB스키마.md) | 테이블 구조 및 Supabase 실행용 SQL |
+| [API명세.md](API명세.md) | API 명세 (초기 버전 — 실제 엔드포인트는 PROJECT_GUIDE.md 기준이 최신) |
+
+---
+
+## 배포
+
+- **VM 서버**: 백엔드(`uvicorn`) + 프론트엔드(`Vite`)를 VM에서 구동, 고정 도메인으로 서비스
+- CORS는 로컬 개발용 localhost/사설 IP는 정규식으로, 배포 도메인은 `backend/main.py`에 명시적으로 허용
 
 ---
 
@@ -129,18 +167,3 @@ npm run dev
 ### Problem
 
 ### Try
-
----
-
-## 참고 자료
-
-- [SDD(스펙 주도 개발) 이해하기](https://news.hada.io/topic?id=21338)
-- [Software Design Document Best Practices](https://www.atlassian.com/work-management/project-management/design-document)
-- [IA 정보구조도 작성 방법](https://brunch.co.kr/@nyonyo/7)
-- [기획자 화면설계서 작성법](https://brunch.co.kr/@soup/10)
-- [Figma 와이어프레임 가이드](https://www.figma.com/ko-kr/resource-library/what-is-wireframing/)
-- [무료 Figma 와이어프레임 키트](https://www.figma.com/ko-kr/templates/wireframe-kits/)
-- [ERD/DB 설계 총정리](https://inpa.tistory.com/entry/DB-%F0%9F%93%9A-%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%AA%A8%EB%8D%B8%EB%A7%81-%EA%B0%9C%EB%85%90-ERD-%EB%8B%A4%EC%9D%B4%EC%96%B4%EA%B7%B8%EB%9E%A8)
-- [API 명세서 작성 가이드라인](https://velog.io/@sebinChu/BackEnd-API-%EB%AA%85%EC%84%B8%EC%84%9C-%EC%9E%91%EC%84%B1-%EA%B0%80%EC%9D%B4%EB%93%9C-%EB%9D%BC%EC%9D%B8)
-- [좋은 README 작성하는 방법](https://velog.io/@sabo/good-readme)
-- [단기 프로젝트 회고 KPT 방법론](https://velog.io/@habwa/%EB%8B%A8%EA%B8%B0-%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8-%ED%9A%8C%EA%B3%A0-KPT-%EB%B0%A9%EB%B2%95%EB%A1%A0)
