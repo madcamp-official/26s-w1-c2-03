@@ -1,0 +1,24 @@
+name: Deploy to VM
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          port: ${{ secrets.VM_PORT || 22 }}
+          script: |
+            cd ~/26s-w1-c2-03
+            git fetch origin main
+            git reset --hard origin/main
+            tmux send-keys -t backend C-c
+            sleep 1
+            tmux send-keys -t backend 'cd ~/26s-w1-c2-03/backend && uvicorn main:app --reload --host 0.0.0.0' Enter
