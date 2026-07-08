@@ -222,7 +222,7 @@ export function getNearbyPlaces({ lat, lng, radius, category } = {}) {
 
 // 손님이 카카오 검색/주변 결과에서 매장을 열람할 때 호출 — 우리 DB에 없으면 미인증 상태로 새로 만들고,
 // 있으면 그대로 반환. 이후 체크인/랭킹/뱃지는 여기서 받은 store.id로 동작함.
-export function resolveStore({ kakaoPlaceId, name, address, lat, lng, imageUrl }) {
+export function resolveStore({ kakaoPlaceId, name, address, lat, lng, imageUrl, category }) {
   return requestJSON("/stores/resolve", {
     method: "POST",
     body: JSON.stringify({
@@ -232,6 +232,7 @@ export function resolveStore({ kakaoPlaceId, name, address, lat, lng, imageUrl }
       lat,
       lng,
       image_url: imageUrl,
+      category,
     }),
   })
 }

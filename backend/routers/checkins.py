@@ -98,7 +98,7 @@ async def create_checkin(
     return result.data[0]
 
 
-MAX_STAMP_COUNT = 3  # 사장님이 체크인 1건 승인할 때 한 번에 줄 수 있는 스탬프 개수 상한 (티어 인플레 방지)
+MAX_STAMP_COUNT = 3  # 사장님이 체크인 1건 승인할 때 한 번에 줄 수 있는 스탬프 개수 상한 (티어 인플레 방지) — 관리자 로그인은 예외
 
 
 class CheckinReview(BaseModel):
@@ -110,8 +110,11 @@ class CheckinReview(BaseModel):
 def review_checkin(checkin_id: str, payload: CheckinReview, current_user_id: str = Depends(get_current_user_id)):
     if payload.status not in ("approved", "rejected"):
         raise HTTPException(status_code=422, detail="status는 approved 또는 rejected 여야 합니다.")
-    if not (1 <= payload.stamp_count <= MAX_STAMP_COUNT):
-        raise HTTPException(status_code=422, detail=f"스탬프 개수는 1~{MAX_STAMP_COUNT}개 사이여야 합니다.")
+    # 관리자 로그인은 테스트 편의를 위해 스탬프 개수 상한(MAX_STAMP_COUNT)이 적용되지 않음
+    is_admin = is_admin_user(current_user_id)
+    if payload.stamp_count < 1 or (not is_admin and payload.stamp_count > MAX_STAMP_COUNT):
+        detail = "스탬프 개수는 1개 이상이어야 해요." if is_admin else f"스탬프 개수는 1~{MAX_STAMP_COUNT}개 사이여야 합니다."
+        raise HTTPException(status_code=422, detail=detail)
 
     db = require_supabase()
 
@@ -124,7 +127,7 @@ def review_checkin(checkin_id: str, payload: CheckinReview, current_user_id: str
         raise HTTPException(status_code=404, detail="체크인을 찾을 수 없습니다.")
     owner_id = (checkin.data[0].get("stores") or {}).get("owner_id")
     # 관리자 로그인은 테스트 편의를 위해 매장 등록 여부와 무관하게 모든 체크인을 승인/거절할 수 있음
-    if owner_id != current_user_id and not is_admin_user(current_user_id):
+    if owner_id != current_user_id and not is_admin:
         raise HTTPException(status_code=403, detail="이 매장의 사장님만 체크인을 승인/거절할 수 있어요.")
 
     update_row = {"status": payload.status, "reviewed_at": "now()"}

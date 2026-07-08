@@ -64,6 +64,7 @@ class StoreResolve(BaseModel):
     lat: float
     lng: float
     image_url: Optional[str] = None
+    category: Optional[str] = None  # 카카오 검색 결과에서 뽑은 대분류(한식/카페 등) — 카테고리 티어 집계에 씀
 
 
 @router.post("/stores/resolve")
@@ -79,12 +80,17 @@ def resolve_store(payload: StoreResolve):
     )
     if existing.data:
         store = existing.data[0]
-        # 예전에 이미지 없이 만들어진 매장이면, 이번에 넘어온 카카오 썸네일로 채워줌(백필).
-        # 이미 이미지가 있으면(사장님이 올렸거나 전에 채워졌으면) 건드리지 않음.
+        # 예전에 이미지·카테고리 없이 만들어진 매장이면, 이번에 넘어온 값으로 채워줌(백필).
+        # 이미 값이 있으면(사장님이 올렸거나 전에 채워졌으면) 건드리지 않음 — 카테고리 없인
+        # 체크인해도 카테고리 티어(브론즈 등)에 전혀 안 잡히는 문제가 있었음.
+        update_row = {}
         if not store.get("image_url") and payload.image_url:
+            update_row["image_url"] = payload.image_url
+        if not store.get("categories") and payload.category:
+            update_row["categories"] = [payload.category]
+        if update_row:
             updated = safe_execute(
-                db.table("stores").update({"image_url": payload.image_url}).eq("id", store["id"]),
-                "매장 이미지 갱신 실패",
+                db.table("stores").update(update_row).eq("id", store["id"]), "매장 정보 갱신 실패"
             )
             return updated.data[0]
         return store
@@ -94,6 +100,7 @@ def resolve_store(payload: StoreResolve):
         "address": payload.address.strip(),
         "kakao_place_id": payload.kakao_place_id,
         "image_url": payload.image_url,
+        "categories": [payload.category] if payload.category else None,
         "status": "unclaimed",
         "lat": payload.lat,
         "lng": payload.lng,

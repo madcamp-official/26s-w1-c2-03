@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import OwnerDashboardScreen from "./screens/OwnerDashboardScreen"
 import OwnerCheckinsScreen from "./screens/OwnerCheckinsScreen"
 import StoreRewardsScreen from "./screens/StoreRewardsScreen"
-import { getStores } from "./lib/api"
+import { getStores, getCheckins } from "./lib/api"
 
 const STATUS_BADGE = {
   pending: { label: "심사중", className: "bg-amber-50 text-amber-600" },
@@ -23,6 +23,7 @@ const STATUS_BADGE = {
 export default function OwnerApp({ user, onExit }) {
   const isAdmin = user.is_admin === true
   const [stores, setStores] = useState(null) // null = 로딩 중
+  const [pendingCountByStore, setPendingCountByStore] = useState({}) // storeId -> 대기 중인 인증 요청 수 (관리자 모드 정렬용)
   const [search, setSearch] = useState("") // 관리자 모드에서 전체 매장이 많을 때 이름으로 좁히는 용도
   const [selectedStore, setSelectedStore] = useState(null)
   const [storeTab, setStoreTab] = useState("checkins") // checkins | rewards — 매장 선택했을 때만 씀
@@ -35,9 +36,22 @@ export default function OwnerApp({ user, onExit }) {
 
   useEffect(loadStores, [user.id])
 
-  const visibleStores = (stores || []).filter(
-    (s) => !isAdmin || !search.trim() || s.name.toLowerCase().includes(search.trim().toLowerCase())
-  )
+  // 관리자 모드는 전체 매장을 다 훑기 힘드니, 새로 들어온 인증 요청이 있는 매장을 목록 맨 위로 올려줌
+  useEffect(() => {
+    if (!isAdmin) return
+    getCheckins({ status: "pending" })
+      .then((checkins) => {
+        const counts = {}
+        for (const c of checkins) counts[c.store_id] = (counts[c.store_id] ?? 0) + 1
+        setPendingCountByStore(counts)
+      })
+      .catch(() => setPendingCountByStore({}))
+  }, [isAdmin, stores])
+
+  const visibleStores = (stores || [])
+    .filter((s) => !isAdmin || !search.trim() || s.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .slice()
+    .sort((a, b) => (pendingCountByStore[b.id] ?? 0) - (pendingCountByStore[a.id] ?? 0))
 
   const handleRegistered = () => {
     setShowRegisterForm(false)
@@ -93,7 +107,7 @@ export default function OwnerApp({ user, onExit }) {
               </button>
             </div>
             {storeTab === "checkins" ? (
-              <OwnerCheckinsScreen storeId={selectedStore.id} />
+              <OwnerCheckinsScreen storeId={selectedStore.id} isAdmin={isAdmin} />
             ) : (
               <StoreRewardsScreen storeId={selectedStore.id} />
             )}
@@ -131,11 +145,14 @@ export default function OwnerApp({ user, onExit }) {
             <div className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
               {visibleStores.map((s) => {
                 const badge = STATUS_BADGE[s.status] || STATUS_BADGE.approved
+                const pendingCount = pendingCountByStore[s.id] ?? 0
                 return (
                   <button
                     key={s.id}
                     onClick={() => setSelectedStore(s)}
-                    className="flex w-full items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm"
+                    className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left shadow-sm ${
+                      pendingCount > 0 ? "border-amber-300 bg-amber-50" : "border-slate-100 bg-white"
+                    }`}
                   >
                     <div>
                       <div className="mb-1 flex items-center gap-2">
@@ -143,6 +160,11 @@ export default function OwnerApp({ user, onExit }) {
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}>
                           {badge.label}
                         </span>
+                        {pendingCount > 0 && (
+                          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-medium text-white">
+                            대기 {pendingCount}건
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-slate-500">
                         {(s.categories || []).join(", ")} · {s.address}
