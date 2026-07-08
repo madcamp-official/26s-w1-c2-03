@@ -3,21 +3,7 @@ import { getUserBadges, getCheckins, getUserCategoryTiers, getUserRegionBadges }
 import StomachMap from "../components/StomachMap"
 import TierBadge from "../components/TierBadge"
 import RegionBadge from "../components/RegionBadge"
-
-// 카테고리별 기본 이모지 (HomeScreen과 동일한 매핑)
-const CATEGORY_EMOJI = {
-  카페: "☕",
-  한식: "🍚",
-  중식: "🥢",
-  일식: "🍣",
-  양식: "🍝",
-  분식: "🍢",
-  주점: "🍺",
-  디저트: "🍰",
-}
-function emojiFor(category) {
-  return CATEGORY_EMOJI[category] || "🍽️"
-}
+import { emojiFor } from "../lib/categoryMeta"
 
 // 마이 — 프로필 + 실제 뱃지 + 실제 방문 기록 (정복 지도)
 export default function MyPageScreen({ user, onLogout, onEnterOwnerMode, onOpenStore, onEditProfile, onDeleteAccount }) {

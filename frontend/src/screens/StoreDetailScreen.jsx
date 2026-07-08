@@ -1,22 +1,7 @@
 // 매장 상세 — 정보 + 내 스탬프 + 인증 버튼 + 방문 랭킹 + 리워드
 import { useEffect, useState } from "react"
 import { getStoreRanking, getStorePhotos, getStoreRewards, getCheckins, getUserRewardClaims, claimReward } from "../lib/api"
-
-const CATEGORY_EMOJI = {
-  한식: "🍚",
-  중식: "🥢",
-  일식: "🍣",
-  양식: "🍝",
-  분식: "🍢",
-  치킨: "🍗",
-  주점: "🍺",
-  카페: "☕",
-  디저트: "🍰",
-  기타: "🍽️",
-}
-function emojiFor(category) {
-  return CATEGORY_EMOJI[category] || "🍽️"
-}
+import { emojiFor } from "../lib/categoryMeta"
 
 // 리워드 하나를 사람이 읽을 문구로 (StoreRewardsScreen과 동일한 규칙)
 function rewardLabel(r) {

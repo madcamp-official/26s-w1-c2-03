@@ -2,31 +2,13 @@ import { useEffect, useMemo, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getNearbyPlaces, searchPlace, getStores, getAvailableRewards, getPlaceImages, getStoreVisitCounts } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
+import { CATEGORY_ORDER, emojiFor } from "../lib/categoryMeta"
 
 const SORT_OPTIONS = [
   { key: "distance", label: "거리순" },
   { key: "visitors", label: "방문자순" },
   { key: "frequent", label: "자주 방문한 순" },
 ]
-
-const CATEGORY_EMOJI = {
-  한식: "🍚",
-  중식: "🥢",
-  일식: "🍣",
-  양식: "🍝",
-  분식: "🍢",
-  치킨: "🍗",
-  주점: "🍺",
-  카페: "☕",
-  디저트: "🍰",
-  기타: "🍽️",
-}
-function emojiFor(category) {
-  return CATEGORY_EMOJI[category] || "🍽️"
-}
-
-// 카테고리 칩은 이 순서로 고정하되, 지금 주변 결과에 실제로 있는 카테고리만 노출함 (빈 칩 방지)
-const CATEGORY_ORDER = ["한식", "중식", "일식", "양식", "분식", "치킨", "주점", "카페", "디저트", "기타"]
 
 // 목록 로딩 중 자리를 잡아주는 스켈레톤 카드 (빈 화면에 텍스트만 뜨는 것보다 덜 휑함)
 function SkeletonCard() {

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react"
 import { polygonArea, polygonContains, polygonCentroid } from "d3-polygon"
 import { getImageData } from "../lib/api"
+import { CATEGORY_COLOR, emojiFor } from "../lib/categoryMeta"
 
 // "내 위장 지도" — 가장 많이 간 Top 5 매장을, 방문 횟수에 비례하는 둥그스름한 블롭으로 위장 실루엣 안에 채운다.
 // (빈 곳은 생겨도 됨 — 직선 경계 대신 원형 테두리로 영역을 구분)
@@ -20,22 +21,11 @@ const DUODENUM = "M347 276 C372 278 386 300 378 324 C372 344 352 350 340 340 C33
 const ORGAN_FILL = "#fdece4"
 const ORGAN_STROKE = "#c98f7d"
 
-const CATEGORY_COLOR = {
-  한식: "#f9a8a8", 중식: "#fbbf24", 일식: "#7cb6f7", 양식: "#5cd6a9", 분식: "#f6a5cd",
-  치킨: "#fb9a4b", 주점: "#b49bf5", 카페: "#d8ab7d", 디저트: "#efa8ec", 기타: "#a7b3c4",
-}
-const CATEGORY_EMOJI = {
-  한식: "🍚", 중식: "🥢", 일식: "🍣", 양식: "🍝", 분식: "🍢",
-  치킨: "🍗", 주점: "🍺", 카페: "☕", 디저트: "🍰", 기타: "🍽️",
-}
 // 카테고리 색이 있으면 그걸, 없으면 방문순 index로 팔레트를 돌려 블롭이 서로 구분되게 함
 const PALETTE = ["#fbbf24", "#7cb6f7", "#f6a5cd", "#5cd6a9", "#fb9a4b", "#b49bf5", "#f9a8a8", "#7dd3fc"]
 function cellColor(cell, index) {
   if (cell.category && CATEGORY_COLOR[cell.category]) return CATEGORY_COLOR[cell.category]
   return PALETTE[index % PALETTE.length]
-}
-function emojiFor(cat) {
-  return CATEGORY_EMOJI[cat] || "🍽️"
 }
 function darken(hex, amount = 0.32) {
   const n = parseInt(hex.slice(1), 16)

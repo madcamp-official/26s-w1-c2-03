@@ -4,27 +4,9 @@ import { useEffect, useRef, useState } from "react"
 import { haversineKm, formatDistance } from "../lib/geo"
 import { getNearbyPlaces, searchPlace, getStores, getPlaceImage } from "../lib/api"
 import { getStampsByStore } from "../lib/stamps"
+import { CATEGORY_ORDER, emojiFor } from "../lib/categoryMeta"
 
 const FALLBACK_CENTER = { lat: 37.5454, lng: 127.0525 }
-
-const CATEGORY_EMOJI = {
-  한식: "🍚",
-  중식: "🥢",
-  일식: "🍣",
-  양식: "🍝",
-  분식: "🍢",
-  치킨: "🍗",
-  주점: "🍺",
-  카페: "☕",
-  디저트: "🍰",
-  기타: "🍽️",
-}
-function emojiFor(category) {
-  return CATEGORY_EMOJI[category] || "🍽️"
-}
-
-// 카테고리 칩은 이 순서로 고정하되, 지금 결과에 실제로 있는 카테고리만 노출 (HomeScreen과 동일)
-const CATEGORY_ORDER = ["한식", "중식", "일식", "양식", "분식", "치킨", "주점", "카페", "디저트", "기타"]
 
 function loadKakaoMaps() {
   return new Promise((resolve, reject) => {
